@@ -1522,7 +1522,7 @@
     100% { transform: translate(-130px, 80vh) rotate(540deg); opacity: 0; }
   }
   /* светящийся меч: тот же фон, только сам клинок, поверх рыцаря */
-  .hero-sword { position: absolute; left: 0; right: 0; bottom: 0; height: 60%; z-index: 1; pointer-events: none;
+  .hero-sword { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; pointer-events: none;
     background: url('img/a580faa3ba.webp') var(--kx, 78%) var(--ky, 70%) / cover no-repeat;
     mix-blend-mode: screen; animation: swordPulse 2.6s ease-in-out infinite;
     -webkit-mask-image: linear-gradient(to top, #000 35%, transparent 100%); mask-image: linear-gradient(to top, #000 35%, transparent 100%);
@@ -2471,6 +2471,7 @@
       var layers = [kn, document.querySelector('.hero-sword')];
       layers.forEach(function (el) {
         if (!el) return;
+        if (el !== kn) el.style.height = h + 'px'; // слой меча всегда ровно поверх рыцаря
         el.style.backgroundSize = dw + 'px ' + dh + 'px';
         el.style.backgroundPosition = ox + 'px ' + oy + 'px';
         var m = ox > 1
