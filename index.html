@@ -1498,6 +1498,8 @@
   /* ================ HERO: лепестки, бабочка ================ */
   .hero-bg-flowers, .hero-sword { height: 62%; --ky: 74%; }
   @media (max-width: 880px) { .hero-bg-flowers, .hero-sword { height: 60%; --ky: 70%; } }
+  @media (min-width: 1300px) { .hero-bg-flowers, .hero-sword { height: 78%; --ky: 100%; } }
+  @media (min-width: 1300px) { .cathedral-banner { height: clamp(420px, 30vw, 620px); } }
   .hero-petals { position: absolute; left: 0; right: 0; bottom: 0; height: 70%; z-index: 1; pointer-events: none; overflow: hidden; }
   .hero-petals i { position: absolute; top: -20px; width: 7px; height: 5px; border-radius: 60% 0 60% 0; background: #8a1a2b; opacity: 0; animation: petal linear infinite; }
   .hero-petals i:nth-child(1) { left: 8%; animation-duration: 11s; animation-delay: -2s; }
@@ -2461,9 +2463,22 @@
     function place() {
       if (!kn) return;
       var cs = getComputedStyle(kn), w = kn.clientWidth, h = kn.clientHeight;
-      var k = Math.max(w / IW, h / IH), dw = IW * k, dh = IH * k;
+      // cover, но не больше, чем нужно, чтобы рыцарь и меч влезли почти целиком (≥88% высоты картинки)
+      var k = Math.min(Math.max(w / IW, h / IH), h / (IH * .88)), dw = IW * k, dh = IH * k;
       var px = parseFloat(cs.getPropertyValue('--kx')) / 100 || .78, py = parseFloat(cs.getPropertyValue('--ky')) / 100 || .7;
+      if (dw < w) px = 1;                     // картинка уже экрана — прижимаем к правому краю
       var ox = (w - dw) * px, oy = (h - dh) * py;
+      var layers = [kn, document.querySelector('.hero-sword')];
+      layers.forEach(function (el) {
+        if (!el) return;
+        el.style.backgroundSize = dw + 'px ' + dh + 'px';
+        el.style.backgroundPosition = ox + 'px ' + oy + 'px';
+        var m = ox > 1
+          ? 'linear-gradient(to top, #000 35%, transparent 100%), linear-gradient(to right, transparent ' + ox + 'px, #000 ' + (ox + dw * .35) + 'px)'
+          : '';
+        el.style.webkitMaskImage = m; el.style.maskImage = m;
+        el.style.webkitMaskComposite = m ? 'source-in' : ''; el.style.maskComposite = m ? 'intersect' : '';
+      });
       var top0 = kn.offsetTop;
       var x1 = Math.max(0, ox + SB[0] * k), x2 = Math.min(w, ox + SB[2] * k);
       var y1 = Math.max(h * .25, oy + SB[1] * k), y2 = Math.min(h, oy + SB[3] * k);
