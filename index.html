@@ -1331,7 +1331,8 @@
   /* ================ MOBILE ================ */
   @media (max-width: 880px) {
     .header-nav { display: none; }
-    .header-inner { grid-template-columns: 1fr auto 1fr; padding: 14px 20px; }
+    .header-inner { grid-template-columns: auto 1fr; padding: 14px 20px; }
+    .header-actions { justify-self: end; }
     .brand-name { font-size: 0.95rem; }
     .brand-mark { width: 36px; height: 32px; }
     section[data-section] { padding: 70px 20px; }
@@ -1622,6 +1623,9 @@
     .marquee-track, .about-code-noise-tex { animation: none; }
     html { scroll-behavior: auto; }
   }
+  /* телефон: ничего не вылезает вбок, страница не ездит влево-вправо */
+  html, body { max-width: 100%; overflow-x: hidden; }
+  @supports (overflow: clip) { html, body { overflow-x: clip; } }
 </style>
 </head>
 <body class="lock">
