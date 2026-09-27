@@ -1026,6 +1026,13 @@
   .co-field input:focus, .co-field textarea:focus { outline: none; border-color: var(--line-strong); }
   .co-field input::placeholder, .co-field textarea::placeholder { color: rgba(255,255,255,0.25); }
   .co-field.invalid input, .co-field.invalid textarea { border-color: #b54b4b; }
+  .co-err { display: none; margin-top: 6px; font-size: .7rem; line-height: 1.5; color: #e07b7b; }
+  .co-field.invalid .co-err { display: block; }
+  .co-err button { background: none; border: 0; padding: 0; color: #fff; text-decoration: underline; cursor: pointer; font: inherit; }
+  .co-hint { margin-top: 6px; font-size: .68rem; color: var(--muted); }
+  .co-check { display: none; align-items: center; gap: 8px; margin-top: 8px; font-size: .7rem; color: var(--muted); cursor: pointer; }
+  .co-field.unknown-city .co-check { display: flex; }
+  .co-check input { width: auto; accent-color: #fff; }
   .co-row { display: flex; gap: 12px; }
   .co-row .co-field { flex: 1; }
   .co-summary {
@@ -2255,23 +2262,29 @@
       <div class="co-section-title">Доставка и контакты</div>
       <div class="co-field" id="f-name">
         <label>Имя и фамилия</label>
-        <input type="text" id="co-name" placeholder="Как к вам обращаться" value="${prev.name||''}">
+        <input type="text" id="co-name" placeholder="Иван Петров" autocomplete="name" maxlength="60" value="${prev.name||''}">
+        <div class="co-err"></div>
       </div>
       <div class="co-field" id="f-contact">
-        <label>E-mail или Telegram</label>
-        <input type="text" id="co-contact" placeholder="you@mail.com / @username" value="${prev.contact||''}">
+        <label>E-mail, Telegram или телефон</label>
+        <input type="text" id="co-contact" placeholder="you@mail.com / @username / +7 900 000-00-00" autocomplete="email" maxlength="60" value="${prev.contact||''}">
+        <div class="co-err"></div>
       </div>
       <div class="co-field" id="f-city">
         <label>Город</label>
-        <input type="text" id="co-city" placeholder="Город" value="${prev.city||''}">
+        <input type="text" id="co-city" placeholder="Начни вводить: Сара…" list="coCities" autocomplete="off" maxlength="60" value="${prev.city||''}">
+        <datalist id="coCities"></datalist>
+        <div class="co-err"></div>
+        <label class="co-check"><input type="checkbox" id="co-city-ok"> Мой населённый пункт не в списке — всё верно</label>
       </div>
       <div class="co-field" id="f-addr">
         <label>Адрес / пункт выдачи</label>
-        <textarea id="co-addr" rows="2" placeholder="Улица, дом, индекс или ПВЗ">${prev.addr||''}</textarea>
+        <textarea id="co-addr" rows="2" maxlength="240" placeholder="ул. Ленина, д. 5, кв. 12, 410000 — или «ПВЗ СДЭК, ул. …»">${prev.addr||''}</textarea>
+        <div class="co-err"></div>
       </div>
       <div class="co-field" id="f-note">
         <label>Комментарий (необязательно)</label>
-        <textarea id="co-note" rows="2" placeholder="Пожелания к заказу">${prev.note||''}</textarea>
+        <textarea id="co-note" rows="2" maxlength="400" placeholder="Пожелания к заказу">${prev.note||''}</textarea>
       </div>
       <div class="co-summary">
         <div class="co-summary-row"><span>Товаров</span><span>${coItemsCount()} шт</span></div>
@@ -2282,31 +2295,110 @@
       </button>
     `;
     body.scrollTop = 0;
+    loadCities().then(fillCityList);
+    ['co-name', 'co-contact', 'co-city', 'co-addr'].forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('blur', () => { if (el.value.trim()) validateField(id); });
+      el.addEventListener('input', () => el.closest('.co-field').classList.remove('invalid'));
+    });
   }
 
-  // Step 2 → validate form, show payment with coming-soon plate
-  function goPayment() {
-    const fields = [
-      ['co-name', 'f-name'],
-      ['co-contact', 'f-contact'],
-      ['co-city', 'f-city'],
-      ['co-addr', 'f-addr'],
-    ];
-    let ok = true;
-    const data = {};
-    fields.forEach(([id, wrap]) => {
-      const el = document.getElementById(id);
-      const w = document.getElementById(wrap);
-      if (!el.value.trim()) { w.classList.add('invalid'); ok = false; }
-      else { w.classList.remove('invalid'); }
-      data[id] = el.value.trim();
-    });
-    data['co-note'] = (document.getElementById('co-note').value || '').trim();
-    if (!ok) { showToast('Заполни обязательные поля'); return; }
+  // ---------- проверка данных заказа ----------
+  let CITIES = null, citiesPromise = null;
+  function loadCities() {
+    if (!citiesPromise) citiesPromise = fetch('data/cities.json').then(r => r.json()).then(d => (CITIES = d)).catch(() => (CITIES = []));
+    return citiesPromise;
+  }
+  function fillCityList() {
+    const dl = document.getElementById('coCities');
+    if (!dl || dl.childElementCount || !CITIES) return;
+    dl.innerHTML = CITIES.map(([n, r]) => `<option value="${n}">${r}</option>`).join('');
+  }
+  const normCity = s => s.toLowerCase().replace(/ё/g, 'е').replace(/^(г\.?|город|пгт\.?|с\.|пос\.?)\s+/, '').replace(/[\s-]+/g, ' ').trim();
+  function lev(a, b) {
+    if (Math.abs(a.length - b.length) > 2) return 9;
+    const d = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      let prev = d[0]; d[0] = i;
+      for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; }
+    }
+    return d[b.length];
+  }
+  const capWords = s => s.toLowerCase().replace(/(^|[\s-])([a-zа-яё])/g, (m, p, c) => p + c.toUpperCase());
 
+  // возвращает '' если всё ок, иначе текст ошибки (может содержать кнопку-подсказку)
+  function checkField(id) {
+    const el = document.getElementById(id); let v = el.value.replace(/\s+/g, ' ').trim();
+    if (id === 'co-name') {
+      if (!v) return 'Укажи имя и фамилию';
+      if (/\d/.test(v)) return 'В имени не должно быть цифр';
+      if (!/^[A-Za-zА-Яа-яЁё]+(?:[-' ][A-Za-zА-Яа-яЁё]+)+$/.test(v)) return 'Имя и фамилия буквами, через пробел — например «Иван Петров»';
+      if (v.split(' ').some(w => w.replace(/[-']/g, '').length < 2)) return 'Имя и фамилия — хотя бы по 2 буквы';
+      el.value = capWords(v); return '';
+    }
+    if (id === 'co-contact') {
+      if (!v) return 'Укажи, как с тобой связаться';
+      const digits = v.replace(/\D/g, '');
+      if (/^[+\d\s()-]+$/.test(v)) {
+        let d = digits;
+        if (d.length === 11 && (d[0] === '8' || d[0] === '7')) d = '7' + d.slice(1);
+        else if (d.length === 10 && d[0] === '9') d = '7' + d;
+        else return 'Телефон в формате +7 900 000-00-00';
+        el.value = `+7 ${d.slice(1, 4)} ${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9)}`; return '';
+      }
+      if (v.includes('@') && !v.startsWith('@')) {
+        return /^[^\s@]+@[^\s@]+\.[A-Za-zА-Яа-я]{2,}$/.test(v) ? (el.value = v.toLowerCase(), '') : 'Проверь e-mail — должен быть вида name@mail.ru';
+      }
+      const tg = v.replace(/^(https?:\/\/)?(t\.me\/|telegram\.me\/)/i, '@');
+      if (/^@[A-Za-z][A-Za-z0-9_]{4,31}$/.test(tg)) { el.value = tg; return ''; }
+      return 'Нужен e-mail, @username из Telegram (от 5 символов) или телефон';
+    }
+    if (id === 'co-city') {
+      const w = el.closest('.co-field'); w.classList.remove('unknown-city');
+      if (!v) return 'Укажи город';
+      if (/\d/.test(v) || !/^[A-Za-zА-Яа-яЁё .()-]+$/.test(v)) return 'Название города — только буквами';
+      if (!CITIES || !CITIES.length) return '';
+      const n = normCity(v);
+      const hit = CITIES.find(([c]) => normCity(c) === n);
+      if (hit) { el.value = hit[0]; return ''; }
+      if (document.getElementById('co-city-ok').checked) { el.value = capWords(v); return ''; }
+      w.classList.add('unknown-city');
+      let best = null, bd = 9;
+      for (const [c] of CITIES) { const d = lev(n, normCity(c)); if (d < bd) { bd = d; best = c; if (d === 1) break; } }
+      return bd <= 2
+        ? `Не нашли такой город. Может, <button type="button" onclick="pickCity('${best}')">${best}</button>?`
+        : 'Не нашли такой город — проверь написание. Если это посёлок или село, отметь галочку ниже.';
+    }
+    if (id === 'co-addr') {
+      if (!v) return 'Укажи адрес или пункт выдачи';
+      const pvz = /(пвз|пункт|сдэк|cdek|boxberry|боксберри|почт|ozon|озон|wb|вайлдб|wildberries|яндекс|постамат|5post)/i.test(v);
+      if (v.length < 8) return 'Слишком коротко — укажи улицу и дом или пункт выдачи';
+      if (!pvz && !/\d/.test(v)) return 'Не хватает номера дома';
+      if (!/[A-Za-zА-Яа-яЁё]{3,}/.test(v)) return 'Укажи улицу или название пункта выдачи';
+      return '';
+    }
+    return '';
+  }
+  function validateField(id) {
+    const w = document.getElementById(id).closest('.co-field'), err = checkField(id);
+    w.classList.toggle('invalid', !!err); w.querySelector('.co-err').innerHTML = err; return !err;
+  }
+  function pickCity(c) { const el = document.getElementById('co-city'); el.value = c; validateField('co-city'); }
+
+  // Step 2 → проверка формы, дальше оплата
+  async function goPayment() {
+    await loadCities();
+    const ids = ['co-name', 'co-contact', 'co-city', 'co-addr'];
+    const ok = ids.map(validateField).every(Boolean);
+    if (!ok) {
+      const first = document.querySelector('#checkoutBody .co-field.invalid input, #checkoutBody .co-field.invalid textarea');
+      if (first) first.focus();
+      showToast('Проверь выделенные поля'); return;
+    }
+    const val = id => document.getElementById(id).value.trim();
     checkoutData = {
-      name: data['co-name'], contact: data['co-contact'],
-      city: data['co-city'], addr: data['co-addr'], note: data['co-note']
+      name: val('co-name'), contact: val('co-contact'),
+      city: val('co-city'), addr: val('co-addr'), note: (document.getElementById('co-note').value || '').trim().slice(0, 400)
     };
     renderPayment();
   }
