@@ -2343,9 +2343,33 @@
     body.scrollTop = 0;
   }
 
-  // Step 3 → place order, show confirmation
-  function placeOrder() {
-    const orderNo = 'YP-' + Date.now().toString().slice(-6);
+  // Сервер заказов (Telegram-бот). Адрес подставляется установщиком бота.
+  const ORDER_API = 'https://yp-shop-bot.smirnovt643.workers.dev';
+  let orderSending = false;
+
+  // Step 3 → отправляем заказ на сервер → бот присылает его владельцу
+  async function placeOrder() {
+    if (orderSending) return;
+    let orderNo = 'YP-' + Date.now().toString().slice(-6), botName = null, sentOk = false;
+    if (ORDER_API.startsWith('https://')) {
+      orderSending = true;
+      const btn = document.querySelector('#checkoutBody .btn-primary');
+      if (btn) { btn.disabled = true; btn.textContent = 'Отправляем…'; }
+      try {
+        const d0 = checkoutData || {};
+        const ctrl = new AbortController(); const tmo = setTimeout(() => ctrl.abort(), 12000);
+        const r = await fetch(ORDER_API + '/order', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+          body: JSON.stringify({ items: cart.map(c => ({ id: c.id, size: c.size, qty: c.qty })),
+            name: d0.name, contact: d0.contact, city: d0.city, addr: d0.addr, note: d0.note })
+        });
+        clearTimeout(tmo);
+        const res = await r.json();
+        if (res.ok) { orderNo = res.id; botName = res.bot; sentOk = true; }
+        else if (r.status === 429 || r.status === 400) { showToast(res.error || 'Ошибка'); orderSending = false; if (btn) { btn.disabled = false; btn.textContent = 'Оформить заказ'; } return; }
+      } catch (e) { /* сервер недоступен — ниже запасной вариант через Telegram */ }
+      orderSending = false;
+    }
     const total = coTotal();
     const count = coItemsCount();
     const contact = (checkoutData && checkoutData.contact) ? checkoutData.contact : '';
@@ -2368,10 +2392,14 @@
         <p>Мы получили вашу заявку на ${count} ${count === 1 ? 'товар' : 'тов.'} на сумму ${formatPrice(total)}.</p>
         <p>Свяжемся с вами${contact ? ' — ' + contact : ''} в течение 24 часов.</p>
         <div class="co-order-no">№ ${orderNo}</div>
+        ${sentOk ? `
+        <p class="co-send-hint">Заказ уже у нас 🖤 Подключи бота — он пришлёт статус заказа и трек-номер.</p>
+        ${botName ? `<a class="btn btn-primary" style="width:100%; justify-content:center; margin-bottom:10px;" href="https://t.me/${botName}?start=${orderNo}" target="_blank" rel="noopener">Следить за заказом в Telegram</a>` : ''}
+        ` : `
         <p class="co-send-hint">Чтобы заказ точно дошёл — отправь его нам в Telegram. Текст заказа скопируется сам, останется вставить в чат.</p>
         <button class="btn btn-primary" style="width:100%; justify-content:center; margin-bottom:10px;" onclick="sendOrderTG()">
           Отправить в Telegram
-        </button>
+        </button>`}
         <button class="btn btn-ghost" style="width:100%; justify-content:center;" onclick="closeCheckout()">
           Готово
         </button>
