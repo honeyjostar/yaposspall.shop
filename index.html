@@ -2050,7 +2050,7 @@
   const PRODUCTS = [
     {
       id: 'matric-bw',
-      name: 'Life is Matric',
+      name: 'We Live in the Matrix',
       category: 'tees',
       categoryLabel: 'Футболка / Oversize',
       price: 2800,
@@ -2083,18 +2083,18 @@
     },
     {
       id: 'poster-mymain',
-      name: 'My Main',
+      name: 'Star',
       category: 'posters',
       categoryLabel: 'Постер / A2',
       price: 650,
       images: ['img/a32d9e7113.webp'],
-      description: 'Постер A2. My Main — фигура из света и праха. Лимитированная серия YP.',
+      description: 'Постер A2. Star — фигура из света и праха. Лимитированная серия YP.',
       sizes: ['A2'],
       badge: 'LIMITED'
     },
     {
       id: 'poster-castle',
-      name: 'Castle of Dreams',
+      name: 'Silent Ruins',
       category: 'posters',
       categoryLabel: 'Постер / A2',
       price: 800,
@@ -3163,6 +3163,26 @@
     }
 
     setTimeout(triggerPhrase, 2500 + Math.random() * 2500);
+  })();
+</script>
+
+<!-- ЖИВАЯ ВКЛАДКА: ушёл с сайта — заголовок зовёт обратно -->
+<script>
+  (function () {
+    const original = document.title;
+    const away = ['вернись…', 'yaposspall ждёт', 'ты где?', 'тьма скучает 🖤'];
+    let timer = null, back = null, i = 0;
+    document.addEventListener('visibilitychange', () => {
+      clearInterval(timer); clearTimeout(back);
+      if (document.hidden) {
+        i = 0;
+        document.title = away[0];
+        timer = setInterval(() => { i = (i + 1) % away.length; document.title = away[i]; }, 2500);
+      } else {
+        document.title = 'ты вернулся 🖤';
+        back = setTimeout(() => { document.title = original; }, 2000);
+      }
+    });
   })();
 </script>
 
