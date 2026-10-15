@@ -3232,7 +3232,7 @@
 
   // ---------- картинки ----------
   var SRC = { run: 'game/run.webp', hit: 'game/hit.webp', tree: 'game/tree.webp', moon: 'game/moon.webp', heal: 'game/heal.webp',
-              cloud1: 'game/cloud1.webp', cloud2: 'game/cloud2.webp', cloud3: 'game/cloud3.webp', cloud4: 'game/cloud4.webp' };
+              down: 'game/down.webp', eyes: 'game/eyes.webp', cloud1: 'game/cloud1.webp', cloud2: 'game/cloud2.webp', cloud3: 'game/cloud3.webp', cloud4: 'game/cloud4.webp' };
   var IMG = {}, loading = null;
   function loadAll() {
     if (loading) return loading;
@@ -3284,7 +3284,8 @@
 
   // ---------- состояние игры ----------
   var state = 'idle', score = 0, combo = 0, lives = 3, MAX_LIVES = 5;
-  var pace = 1, PACE_MAX = 3.2; // каждый отбитый шар разгоняет игру
+  var pace = 1, PACE_MAX = 3.2;
+  var deadAt = -1, eyesA = 0; // проигрыш: герой лежит, глаза проступают на фоне // каждый отбитый шар разгоняет игру
   var balls = [], parts = [], texts = [], shake = 0, flash = 0, hitstop = 0, hurt = 0;
   var spawnIn = 1.2, lastArrive = 0, hits = 0, healEvery = 14, healHinted = false;
   var swing = null, cooldown = 0, screenLock = 0, speed = 1;
@@ -3394,7 +3395,7 @@
   }
   function start() { reset(); newReward = null; state = 'play'; scr.classList.add('hide'); hud.classList.add('on'); updateHud(); }
   function gameOver() {
-    state = 'over'; screenLock = t + 0.9;
+    state = 'over'; screenLock = t + 0.9; deadAt = t; swing = null;
     var rec = score > save.best;
     if (rec) { save.best = Math.floor(score); store(); }
     var got = REWARDS.filter(function (r) { return save.best >= r.at; }).pop();
@@ -3424,7 +3425,7 @@
     t += dt; update(dt); draw();
   }
   function update(dt) {
-    speed = state === 'play' ? 0.85 + pace * 0.35 : 0.8; // фон и бег тоже ускоряются
+    speed = state === 'play' ? 0.85 + pace * 0.35 : state === 'over' ? 0.12 : 0.8; // фон и бег тоже ускоряются
     scroll += dt * 260 * speed * s * 1.6;
     // фон
     clouds.forEach(function (c) { c.x -= c.sp * 260 * speed * dt; if (c.x < -260) { c.x = W + Math.random() * 200; c.y = H * (0.08 + Math.random() * 0.45); } });
@@ -3474,6 +3475,7 @@
     parts = parts.filter(function (p) { return p.age < p.life; });
     texts.forEach(function (x) { x.age += dt; x.y -= 30 * dt; });
     texts = texts.filter(function (x) { return x.age < x.life; });
+    eyesA += ((state === 'over' ? 1 : 0) - eyesA) * Math.min(1, dt * (state === 'over' ? 0.9 : 4));
     shake *= Math.pow(0.002, dt); flash = Math.max(0, flash - dt * 2.2); hurt = Math.max(0, hurt - dt);
   }
 
@@ -3485,6 +3487,16 @@
     g.addColorStop(0, '#0d0e15'); g.addColorStop(1, '#020203');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     if (shake > 0.3) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    if (eyesA > 0.01 && ok(IMG.eyes)) {
+      var ew = W < 700 ? W * 1.35 : Math.min(W * 0.78, 1000), eh = ew * IMG.eyes.height / IMG.eyes.width;
+      var blink = (t % 5.5) > 5.35 ? 0.15 : 1; // иногда моргают
+      ctx.save();
+      ctx.globalAlpha = eyesA * 0.45 * blink;
+      ctx.translate(W / 2, H * 0.36 + Math.sin(t * 0.7) * 6);
+      ctx.scale(1 + (1 - eyesA) * 0.15, 1 + (1 - eyesA) * 0.15);
+      ctx.drawImage(IMG.eyes, -ew / 2, -eh / 2, ew, eh);
+      ctx.restore();
+    }
     // луна
     if (ok(IMG.moon)) {
       var mw = Math.min(W * 0.13, 190), mh = mw * IMG.moon.height / IMG.moon.width, mx = W * 0.8, my = H * 0.1 + Math.sin(t * 0.3) * 4;
@@ -3497,7 +3509,7 @@
     clouds.forEach(function (c) {
       var im = IMG[c.k]; if (!ok(im)) return;
       var w = im.width * c.sc * Math.max(s * 1.4, 0.6);
-      ctx.globalAlpha = c.a; ctx.drawImage(im, c.x, c.y, w, w * im.height / im.width);
+      ctx.globalAlpha = c.a * (1 - eyesA * 0.7); ctx.drawImage(im, c.x, c.y, w, w * im.height / im.width);
     });
     ctx.globalAlpha = 1;
     // дальний горизонт и маскот, который пробегает
@@ -3513,7 +3525,7 @@
     // деревья
     if (ok(IMG.tree)) trees.forEach(function (tr) {
       var th = H * 0.36 * tr.sc, tw = th * IMG.tree.width / IMG.tree.height;
-      ctx.globalAlpha = 0.55; ctx.drawImage(IMG.tree, tr.x, groundY - th + 6, tw, th);
+      ctx.globalAlpha = 0.55 * (1 - eyesA * 0.6); ctx.drawImage(IMG.tree, tr.x, groundY - th + 6, tw, th);
     });
     ctx.globalAlpha = 1;
     // лепестки
@@ -3540,7 +3552,11 @@
     }
     // герой
     if (hurt > 0 && Math.floor(hurt * 20) % 2) ctx.globalAlpha = 0.35;
-    if (swing && ok(IMG.hit)) {
+    if (state === 'over' && ok(IMG.down)) {
+      var dw = 360 * s, dh = dw * IMG.down.height / IMG.down.width;
+      var fall = Math.min((t - deadAt) / 0.25, 1); // короткое падение
+      ctx.drawImage(IMG.down, px - 120 * s, groundY - dh + 6 * s - (1 - fall) * 40 * s, dw, dh);
+    } else if (swing && ok(IMG.hit)) {
       ctx.drawImage(IMG.hit, swing.f * HIT.fw, 0, HIT.fw, HIT.fh, px - HIT.cx * s, groundY - HIT.foot * s, HIT.fw * s, HIT.fh * s);
     } else if (ok(IMG.run)) {
       var rf = Math.floor(t * 1000 / (95 / speed)) % RUN.n;
