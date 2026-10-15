@@ -537,13 +537,78 @@
     transition: transform 0.6s ease, opacity 0.3s;
     background: #000;
   }
-  .product-media .img-hover {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
+  /* Листание фото мышкой (только ПК): полоски-индикаторы снизу карточки */
+  .scrub-bars {
+    position: absolute; left: 14px; right: 14px; bottom: 12px;
+    display: flex; gap: 4px; z-index: 2;
+    opacity: 0; transition: opacity .25s;
+    pointer-events: none;
   }
-  .product-media:has(.img-hover):hover .img-main { opacity: 0; }
-  .product:hover .img-hover { opacity: 1; transform: scale(1.02); }
+  .scrub-bars i { flex: 1; height: 2px; background: rgba(255,255,255,.22); transition: background .2s; }
+  .scrub-bars i.on { background: #fff; }
+  @media (hover: hover) and (pointer: fine) {
+    .product:hover .scrub-bars { opacity: 1; }
+  }
+
+  /* Карточка-загадка: следующий дроп */
+  .product.mystery { cursor: default; }
+  .product.mystery:hover { transform: none; }
+  .mystery-media {
+    background: radial-gradient(ellipse at 50% 55%, #121016 0%, #000 70%);
+    flex-direction: column; gap: 18px;
+  }
+  .mystery-q {
+    font-family: 'Montserrat', sans-serif; font-weight: 800;
+    font-size: clamp(5rem, 11vw, 8rem); line-height: 1; color: #fff;
+    position: relative; animation: mq-breathe 4s ease-in-out infinite;
+  }
+  .mystery-q::before, .mystery-q::after {
+    content: '?'; position: absolute; inset: 0; opacity: .55;
+  }
+  .mystery-q::before { color: #8a84a0; animation: mq-glitch 3.2s steps(1) infinite; }
+  .mystery-q::after  { color: #4a4458; animation: mq-glitch 2.7s steps(1) infinite reverse; }
+  @keyframes mq-breathe { 0%,100% { opacity: .85; } 50% { opacity: 1; } }
+  @keyframes mq-glitch {
+    0%, 86%, 100% { transform: none; clip-path: inset(0 0 0 0); opacity: 0; }
+    88% { transform: translate(-4px, 1px); clip-path: inset(20% 0 55% 0); opacity: .7; }
+    92% { transform: translate(3px, -2px); clip-path: inset(60% 0 10% 0); opacity: .7; }
+    95% { transform: translate(-2px, 0); clip-path: inset(40% 0 35% 0); opacity: .7; }
+  }
+  .mystery-count {
+    font-family: 'JetBrains Mono', monospace; font-size: .72rem;
+    letter-spacing: .14em; color: #8a84a0; font-variant-numeric: tabular-nums;
+    text-align: center; padding: 0 12px;
+  }
+  .mystery-count small { display: block; font-size: .55rem; letter-spacing: .38em; color: #4f4a5c; margin-bottom: 6px; text-transform: uppercase; }
+  .mystery .product-add { opacity: .5; }
+
+  /* Cookie-баннер */
+  .yp-cookie {
+    position: fixed; left: 24px; bottom: 24px; z-index: 290;
+    width: min(360px, calc(100vw - 32px));
+    background: rgba(0,0,0,.92); border: 1px solid var(--line-strong);
+    padding: 20px 22px; backdrop-filter: blur(6px);
+    opacity: 0; transform: translateY(16px); visibility: hidden;
+    transition: opacity .4s, transform .4s, visibility .4s;
+  }
+  .yp-cookie.show { opacity: 1; transform: none; visibility: visible; }
+  .yp-cookie::before, .yp-cookie::after {
+    content: ''; position: absolute; width: 10px; height: 10px; border: 1px solid #fff;
+  }
+  .yp-cookie::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+  .yp-cookie::after  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+  .yp-cookie-label {
+    font-family: 'JetBrains Mono', monospace; font-size: .58rem;
+    letter-spacing: .38em; text-transform: uppercase; color: #8a84a0; margin-bottom: 10px;
+  }
+  .yp-cookie p { font-size: .78rem; line-height: 1.6; color: #bbb; margin-bottom: 16px; }
+  .yp-cookie button {
+    width: 100%; background: #fff; color: #000; border: 1px solid #fff;
+    padding: 11px 0; font-size: .66rem; font-weight: 700; letter-spacing: .3em; text-transform: uppercase;
+    transition: background .2s, color .2s;
+  }
+  .yp-cookie button:hover { background: transparent; color: #fff; }
+  @media (max-width: 600px) { .yp-cookie { left: 16px; right: 16px; bottom: 16px; width: auto; } }
 
   .product-badge {
     position: absolute;
@@ -2059,9 +2124,9 @@
     grid.innerHTML = items.map(p => `
       <article class="product" onclick="openProduct('${p.id}')" tabindex="0" role="button" aria-label="${p.name}, ${formatPrice(p.price)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProduct('${p.id}')}">
         ${p.badge ? `<span class="product-badge dark">${p.badge}</span>` : ''}
-        <div class="product-media">
+        <div class="product-media" data-id="${p.id}">
           <img class="img-main" src="${p.images[0]}" alt="${p.name}" loading="lazy" decoding="async">
-          ${p.images.length > 1 ? `<img class="img-hover" src="${p.images[p.images.length - 1]}" alt="${p.name} — model" loading="lazy" decoding="async">` : ''}
+          ${p.images.length > 1 ? `<div class="scrub-bars">${p.images.map((_, i) => `<i${i === 0 ? ' class="on"' : ''}></i>`).join('')}</div>` : ''}
         </div>
         <div class="product-info">
           <div class="product-cat">${p.categoryLabel}</div>
@@ -2072,8 +2137,69 @@
           </div>
         </div>
       </article>
-    `).join('');
+    `).join('') + mysteryCard();
+    initScrub(grid);
   }
+
+  // ---- Листание фото мышкой по карточке (только устройства с мышью) ----
+  const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  function initScrub(grid) {
+    if (!canHover) return;
+    grid.querySelectorAll('.product-media[data-id]').forEach(media => {
+      const p = PRODUCTS.find(x => x.id === media.dataset.id);
+      if (!p || p.images.length < 2) return;
+      const img = media.querySelector('.img-main');
+      const bars = media.querySelectorAll('.scrub-bars i');
+      let cur = 0, loaded = false;
+      const show = i => {
+        if (i === cur) return;
+        cur = i;
+        img.src = p.images[i];
+        bars.forEach((b, k) => b.classList.toggle('on', k === i));
+      };
+      media.addEventListener('mouseenter', () => {
+        if (loaded) return;
+        loaded = true; // подгружаем все фото заранее, чтобы листалось без задержки
+        p.images.forEach(src => { const im = new Image(); im.src = src; });
+      });
+      media.addEventListener('mousemove', e => {
+        const r = media.getBoundingClientRect();
+        const x = Math.min(Math.max(e.clientX - r.left, 0), r.width - 1);
+        show(Math.floor(x / r.width * p.images.length));
+      });
+      media.addEventListener('mouseleave', () => show(0));
+    });
+  }
+
+  // ---- Карточка-загадка: следующий дроп с бесконечным отсчётом ----
+  let mysteryTimer = null;
+  function mysteryCard() {
+    return `
+      <article class="product mystery" onclick="showToast('Скоро. Следи за нами в Telegram')">
+        <span class="product-badge dark">SOON</span>
+        <div class="product-media mystery-media">
+          <div class="mystery-q">?</div>
+          <div class="mystery-count"><small>до открытия</small><span id="mysteryCount"></span></div>
+        </div>
+        <div class="product-info">
+          <div class="product-cat">Drop N°02 / ???</div>
+          <div class="product-name">Новая позиция</div>
+          <div class="product-bottom">
+            <div class="product-price">??? ₽</div>
+            <button class="product-add" onclick="event.stopPropagation(); showToast('Ещё не время')">Скоро</button>
+          </div>
+        </div>
+      </article>`;
+  }
+  // 15 девяток, минус ~20 в секунду — этот отсчёт не закончится никогда
+  let mysteryLeft = 999999999999999;
+  function tickMystery() {
+    const el = document.getElementById('mysteryCount');
+    if (!el) return;
+    mysteryLeft -= 1 + Math.floor(Math.random() * 3);
+    el.textContent = String(mysteryLeft).replace(/\B(?=(\d{3})+(?!\d))/g, '-');
+  }
+  if (!mysteryTimer) mysteryTimer = setInterval(tickMystery, 50);
 
   document.querySelectorAll('.filter').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3037,6 +3163,26 @@
     }
 
     setTimeout(triggerPhrase, 2500 + Math.random() * 2500);
+  })();
+</script>
+
+<!-- COOKIE BANNER -->
+<div class="yp-cookie" id="ypCookie" role="dialog" aria-label="Cookies">
+  <div class="yp-cookie-label">— cookies —</div>
+  <p>Мы храним только твою корзину — прямо в браузере. Никаких трекеров, никакой слежки. Только тьма.</p>
+  <button type="button" id="ypCookieOk">Принять</button>
+</div>
+<script>
+  (function () {
+    let seen = false;
+    try { seen = localStorage.getItem('yp_cookie_ok') === '1'; } catch (e) {}
+    if (seen) return;
+    const box = document.getElementById('ypCookie');
+    setTimeout(() => box.classList.add('show'), 5200); // после прелоадера
+    document.getElementById('ypCookieOk').addEventListener('click', () => {
+      try { localStorage.setItem('yp_cookie_ok', '1'); } catch (e) {}
+      box.classList.remove('show');
+    });
   })();
 </script>
 
