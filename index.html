@@ -3319,7 +3319,7 @@
 
   // ---------- картинки ----------
   var SRC = { run: 'game/run.webp', hit: 'game/hit.webp', tree: 'game/tree.webp', moon: 'game/moon.webp', heal: 'game/heal.webp',
-              down: 'game/down.webp', eyes: 'game/eyes.webp', cloud1: 'game/cloud1.webp', cloud2: 'game/cloud2.webp', cloud3: 'game/cloud3.webp', cloud4: 'game/cloud4.webp' };
+              down: 'game/down.webp', kick: 'game/kick.webp', eyes: 'game/eyes.webp', cloud1: 'game/cloud1.webp', cloud2: 'game/cloud2.webp', cloud3: 'game/cloud3.webp', cloud4: 'game/cloud4.webp' };
   var IMG = {}, loading = null;
   function loadAll() {
     if (loading) return loading;
@@ -3333,6 +3333,8 @@
   // спрайты (размеры кадров и точка «ноги» персонажа)
   var RUN = { fw: 176, fh: 223, n: 8, cx: 101, foot: 220 };
   var HIT = { fw: 192, fh: 318, n: 9, cx: 99, foot: 314, durs: [90, 70, 70, 120, 80, 100, 80, 90, 100] };
+  var KICK = { fw: 312, fh: 238, n: 4, cx: 112, foot: 232, durs: [45, 40, 40, 140] };   // удар ногой по мячу снизу
+  var DOWN = { fw: 360, fh: 188, n: 18, ms: 100 };                                        // лежит, над ним крутятся звёзды
   var CHAR_H = 220; // рост персонажа в пикселях спрайта
   var TOUCH = window.matchMedia('(hover: none)').matches;
 
@@ -3362,6 +3364,7 @@
     s = ch / CHAR_H; groundY = Math.round(H * 0.8); px = Math.max(60, W * 0.24);
   }
   function hitPt() { return { x: px + 76 * s, y: groundY - 270 * s }; }   // где герой бьёт шар в прыжке
+  function kickPt() { return { x: px + 100 * s, y: groundY - 34 * s }; }   // где нога встречает мяч снизу
   function bodyPt() { return { x: px + 15 * s, y: groundY - 120 * s }; }  // куда шар прилетает, если не отбить
 
   // ---------- фон ----------
@@ -3536,11 +3539,17 @@
     var weird = Math.min(0.35 + (pace - 1) * 0.3, 0.8); // чем дальше — тем чаще «нечестные» шары
     var kind = heal ? 'float' : (Math.random() < weird ? kinds[1 + Math.floor(Math.random() * 4)] : 'line');
     var slow = { line: 1, delay: 1.55, rush: 1.15, feint: 1.4, stutter: 1.35, float: 1.5 }[kind];
-    var T = d.T * slow * (0.75 + Math.random() * 0.6);
+    var low = !heal && hits >= 3 && Math.random() < Math.min(0.22 + (pace - 1) * 0.12, 0.45); // мяч по дороге — пинать ногой
+    if (low && kind === 'feint') kind = 'rush';
+    var T = d.T * slow * (0.75 + Math.random() * 0.6) * (low ? 1.1 : 1);
     var arrive = t + T;
     if (arrive < lastArrive + d.minSpace) { T += lastArrive + d.minSpace - arrive; arrive = t + T; }
     lastArrive = arrive;
-    balls.push({ heal: heal, kind: kind, x0: W * (0.62 + Math.random() * 0.45), y0: -40, tx: h.x, ty: h.y, T: T, age: 0, arc: (Math.random() - 0.5) * 120 * s,
+    var kp = kickPt();
+    if (low) balls.push({ heal: false, low: true, kind: kind, x0: W + 40, y0: kp.y, tx: kp.x, ty: kp.y, T: T, age: 0, arc: 0,
+                 bounce: (10 + Math.random() * 40) * s, nb: 2 + Math.floor(Math.random() * 3),
+                 hold: 0.35 + Math.random() * 0.25, st: 'in', x: W + 40, y: kp.y, vx: 0, vy: 0, r: 24 * s, trail: [], spin: 0, charge: 0, rot: 0 });
+    else balls.push({ heal: heal, kind: kind, x0: W * (0.62 + Math.random() * 0.45), y0: -40, tx: h.x, ty: h.y, T: T, age: 0, arc: (Math.random() - 0.5) * 120 * s,
                  hold: 0.35 + Math.random() * 0.25, st: 'in', x: 0, y: 0, vx: 0, vy: 0, r: (heal ? 34 : 15) * s * 1.4, trail: [], spin: 0, charge: 0, rot: 0 });
     if (heal && !healHinted) { healHinted = true; addText('чокопай — не бей, пусть долетит', W / 2, H * 0.32, 2.4, 13); }
   }
@@ -3575,8 +3584,9 @@
       b.pr = pr;
       var wob = b.kind === 'float' ? Math.sin(b.age * 4) * 18 * s : 0;
       b.x = b.x0 + (b.tx - b.x0) * pr + wob; b.y = b.y0 + (b.ty - b.y0) * pr - Math.sin(Math.PI * pr) * b.arc;
+      if (b.low) { b.y = b.ty - Math.abs(Math.sin(pr * Math.PI * b.nb)) * b.bounce * (1 - pr); b.rot = -b.x / b.r; }
     } else {
-      var v = Math.min((b.age - b.T) / late, 1), bp = bodyPt();
+      var v = Math.min((b.age - b.T) / late, 1), bp = b.low ? { x: px + 10 * s, y: b.ty } : bodyPt();
       b.x = b.tx + (bp.x - b.tx) * v; b.y = b.ty + (bp.y - b.ty) * v;
       if (v >= 1) return true; // долетел до героя
     }
@@ -3600,19 +3610,21 @@
       if (t < screenLock) return;
       start(); return;
     }
-    if (cooldown > 0 || (swing && swing.f < 3)) return;
-    swing = { f: 1, ft: 0 };
+    if (cooldown > 0 || (swing && swing.f < (swing.kick ? 2 : 3))) return;
     // ищем шар, который можно отбить (ближайший к моменту удара)
     var best = null, bd = 1e9;
     balls.forEach(function (b) { if (hittable(b)) { var d = Math.abs(b.age - b.T); if (d < bd) { bd = d; best = b; } } });
+    // мяч снизу — удар ногой, сверху — прыжок с ударом
+    swing = best && best.low ? { kick: true, f: 0, ft: 0 } : { f: 1, ft: 0 };
     if (!best) { AU.whiff(); combo = 0; cooldown = 0.3; addText('мимо', hitPt().x + 30 * s, hitPt().y - 30 * s, 0.6, 13); updateHud(); return; }
-    var hp = hitPt();
+    var hp = best.low ? kickPt() : hitPt();
     if (best.heal) {
       AU.broke(); best.st = 'dead'; burst(best.x, best.y, 18, 0.7); addText('чокопай разбит', best.x, best.y - 30, 0.9, 13); combo = 0; updateHud(); return;
     }
     var perfect = bd < 0.075;
     best.st = 'out'; best.x = hp.x; best.y = hp.y;
-    best.vx = W * (1.1 + Math.random() * 0.5); best.vy = -H * (0.7 + Math.random() * 0.6); best.spin = 18;
+    if (best.low) { best.vx = W * (1.4 + Math.random() * 0.5); best.vy = -H * (0.25 + Math.random() * 0.45); best.spin = 25; } // пинок вдоль дороги
+    else { best.vx = W * (1.1 + Math.random() * 0.5); best.vy = -H * (0.7 + Math.random() * 0.6); best.spin = 18; }
     combo++; hits++;
     var oldPace = pace;
     pace = Math.min(pace * 1.035, PACE_MAX); // +3.5% скорости за каждый удар
@@ -3653,7 +3665,7 @@
     state = 'idle'; hud.classList.remove('on');
     scr.innerHTML = '<div class="yg-label">— другое измерение —</div><h3>БЕГИ.<br>БЕЙ.</h3>' +
       '<p>Шар летит сверху — <b>' + (TOUCH ? 'тапай по экрану' : 'кликай (ЛКМ)') + '</b>, когда он подлетает к тебе, и отбивай. Чем точнее — тем больше очков.<br>' +
-      '<b>Чокопай не бей</b> — пусть долетит, это +1 жизнь.' + (TOUCH ? '' : '<br><b>M</b> — музыка вкл/выкл.') + '</p>' + rewardsHtml() +
+      'Мяч может прикатиться и <b>снизу, по дороге</b> — тогда пинай его тем же кликом.<br><b>Чокопай не бей</b> — пусть долетит, это +1 жизнь.' + (TOUCH ? '' : '<br><b>M</b> — музыка вкл/выкл.') + '</p>' + rewardsHtml() +
       (save.best ? '<p>рекорд — <b>' + fmt(save.best) + '</b></p>' : '') + '<div class="yg-go">' + (TOUCH ? 'тапни' : 'кликни') + ', чтобы начать</div>';
     scr.classList.remove('hide');
   }
@@ -3712,8 +3724,9 @@
     // герой
     if (swing) {
       swing.ft += dt * 1000;
-      var dur = HIT.durs[swing.f] * (swing.f <= 3 ? 0.45 : 0.7);
-      if (swing.ft >= dur) { swing.ft = 0; swing.f++; if (swing.f >= HIT.n) swing = null; }
+      var SP = swing.kick ? KICK : HIT;
+      var dur = swing.kick ? SP.durs[swing.f] : SP.durs[swing.f] * (swing.f <= 3 ? 0.45 : 0.7);
+      if (swing.ft >= dur) { swing.ft = 0; swing.f++; if (swing.f >= SP.n) swing = null; }
     }
     if (cooldown > 0) cooldown -= dt;
     // шары
@@ -3814,19 +3827,26 @@
       for (var xx = -off; xx < W; xx += gap) { ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + 30 + row * 10, yy); ctx.stroke(); }
     }
     // зона удара — подсказка, когда шар рядом
-    var hp = hitPt(), near = balls.some(hittable);
     if (state === 'play') {
-      ctx.strokeStyle = near ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.07)';
+      var zones = [[hitPt(), balls.some(function (b) { return !b.low && hittable(b); }), 42 * s * 1.4],
+                   [kickPt(), balls.some(function (b) { return b.low && hittable(b); }), 34 * s]];
       ctx.lineWidth = 1; ctx.setLineDash([3, 6]);
-      ctx.beginPath(); ctx.arc(hp.x, hp.y, 42 * s * 1.4 + Math.sin(t * 6) * 2, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      zones.forEach(function (z) {
+        if (!z[1] && z[0].y > groundY - 60 * s) return; // нижнюю зону показываем только когда мяч рядом
+        ctx.strokeStyle = z[1] ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.07)';
+        ctx.beginPath(); ctx.arc(z[0].x, z[0].y, z[2] + Math.sin(t * 6) * 2, 0, Math.PI * 2); ctx.stroke();
+      });
+      ctx.setLineDash([]);
     }
     // герой
     if (hurt > 0 && Math.floor(hurt * 20) % 2) ctx.globalAlpha = 0.35;
     if (state === 'over' && ok(IMG.down)) {
-      var dw = 360 * s, dh = dw * IMG.down.height / IMG.down.width;
+      var dw = DOWN.fw * s, dh = DOWN.fh * s, df = Math.floor((t - deadAt) * 1000 / DOWN.ms) % DOWN.n;
       var fall = Math.min((t - deadAt) / 0.25, 1); // короткое падение
-      ctx.drawImage(IMG.down, px - 120 * s, groundY - dh + 6 * s - (1 - fall) * 40 * s, dw, dh);
-    } else if (swing && ok(IMG.hit)) {
+      ctx.drawImage(IMG.down, df * DOWN.fw, 0, DOWN.fw, DOWN.fh, px - 120 * s, groundY - dh + 6 * s - (1 - fall) * 40 * s, dw, dh);
+    } else if (swing && swing.kick && ok(IMG.kick)) {
+      ctx.drawImage(IMG.kick, swing.f * KICK.fw, 0, KICK.fw, KICK.fh, px - KICK.cx * s, groundY - KICK.foot * s, KICK.fw * s, KICK.fh * s);
+    } else if (swing && !swing.kick && ok(IMG.hit)) {
       ctx.drawImage(IMG.hit, swing.f * HIT.fw, 0, HIT.fw, HIT.fh, px - HIT.cx * s, groundY - HIT.foot * s, HIT.fw * s, HIT.fh * s);
     } else if (ok(IMG.run)) {
       var rf = Math.floor(t * 1000 / (95 / speed)) % RUN.n;
@@ -3863,6 +3883,16 @@
         bg.addColorStop(0, 'rgba(210,222,255,.35)'); bg.addColorStop(1, 'rgba(210,222,255,0)');
         ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 2.4, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+        if (b.low) { // футбольный мяч: пятиугольник в центре и лоскуты по краю, крутится при качении
+          var rr = b.rot + (b.st === 'out' ? t * b.spin : 0);
+          ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(rr); ctx.fillStyle = '#05060a';
+          function pent(cx, cy, R) { ctx.beginPath(); for (var q = 0; q < 5; q++) { var aa = -Math.PI / 2 + q * Math.PI * 2 / 5; ctx.lineTo(cx + Math.cos(aa) * R, cy + Math.sin(aa) * R); } ctx.closePath(); ctx.fill(); }
+          pent(0, 0, b.r * 0.32);
+          for (var q = 0; q < 5; q++) { var aa = -Math.PI / 2 + q * Math.PI * 2 / 5; pent(Math.cos(aa) * b.r * 0.86, Math.sin(aa) * b.r * 0.86, b.r * 0.24); }
+          ctx.restore();
+          ctx.strokeStyle = '#05060a'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke();
+          return;
+        }
         ctx.strokeStyle = '#05060a'; ctx.lineWidth = Math.max(1.5, b.r * 0.18);
         var sp = b.age * 6 + (b.st === 'out' ? t * b.spin : 0);
         ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.62, sp, sp + Math.PI * 1.1); ctx.stroke();
