@@ -1057,6 +1057,22 @@
     color: var(--muted);
     font-weight: 500;
   }
+  .promo { margin-bottom: 14px; }
+  .promo-row { display: flex; gap: 8px; }
+  .promo-row input { flex: 1; min-width: 0; background: transparent; border: 1px solid var(--line-strong); color: #fff;
+    padding: 11px 12px; font-family: 'JetBrains Mono', monospace; font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; }
+  .promo-row input:focus { outline: none; border-color: #fff; }
+  .promo-row button { background: transparent; border: 1px solid var(--line-strong); color: #fff; padding: 0 14px;
+    font-size: .6rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+  .promo-row button:hover { background: #fff; color: #000; }
+  .promo-msg { font-size: .68rem; margin-top: 8px; min-height: 1em; color: var(--muted); letter-spacing: .04em; }
+  .promo-msg.ok { color: #fff; }
+  .promo-msg.bad { color: #d98a9b; }
+  .promo-msg button { background: none; border: none; color: var(--muted); text-decoration: underline; font-size: .66rem; padding: 0; margin-left: 8px; }
+  .cart-sub { font-size: .76rem; color: var(--muted); }
+  .cart-sub div { display: flex; justify-content: space-between; padding: 3px 0; }
+  .cart-sub div.disc { color: #fff; }
+  .cart-sub:not(:empty) { margin-bottom: 8px; }
   .cart-total-value {
     font-size: 1.4rem;
     font-weight: 700;
@@ -1934,6 +1950,15 @@
   </div>
   <div class="drawer-body" id="cartBody"></div>
   <div class="drawer-foot" id="cartFoot" style="display:none;">
+    <div class="promo">
+      <div class="promo-row">
+        <input type="text" id="promoInput" placeholder="Промокод" maxlength="16" autocomplete="off" spellcheck="false"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();applyPromo()}">
+        <button type="button" id="promoBtn" onclick="applyPromo()">Применить</button>
+      </div>
+      <div class="promo-msg" id="promoMsg"></div>
+    </div>
+    <div class="cart-sub" id="cartSub"></div>
     <div class="cart-total">
       <span class="cart-total-label">Итого</span>
       <span class="cart-total-value" id="cartTotal">0 ₽</span>
@@ -2382,8 +2407,13 @@
           <button class="cart-item-remove" onclick="removeFromCart(${idx})" aria-label="Удалить">×</button>
         </div>`;
     }).join('');
-    document.getElementById('cartTotal').textContent = formatPrice(total);
+    const disc = promoDiscount(total);
+    document.getElementById('cartSub').innerHTML = disc
+      ? `<div><span>Товары</span><span>${formatPrice(total)}</span></div><div class="disc"><span>Промокод −${YPPromo.applied().off}%</span><span>−${formatPrice(disc)}</span></div>`
+      : '';
+    document.getElementById('cartTotal').textContent = formatPrice(total - disc);
     foot.style.display = 'block';
+    renderPromoMsg();
   }
   function openCart() {
     document.getElementById('cartDrawer').classList.add('open');
@@ -2398,6 +2428,57 @@
     goCheckout();
   }
 
+  // ---- Промокоды ----
+  // Формат: YP10-ABCD-EFGH. Последние 3 символа — контрольная сумма: случайный ввод почти всегда отсеется,
+  // а следующий код «по логике» не угадать — 5 символов внутри генерируются случайно.
+  const YPPromo = (function () {
+    const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', SALT = 'yp~gothic~drop~01', OFFS = { '05': 5, '10': 10 };
+    function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h; }
+    function sum(body) { const h = hash(SALT + body + SALT); return A[h % 31] + A[Math.floor(h / 31) % 31] + A[Math.floor(h / 961) % 31]; }
+    function rnd(n) {
+      let out = ''; const buf = new Uint32Array(n);
+      (window.crypto || window.msCrypto).getRandomValues(buf);
+      for (let i = 0; i < n; i++) out += A[buf[i] % A.length];
+      return out;
+    }
+    function make(off) {
+      const pre = 'YP' + String(off).padStart(2, '0'), r = rnd(5);
+      return pre + '-' + r.slice(0, 4) + '-' + r.slice(4) + sum(pre + r);
+    }
+    function check(raw) {
+      const c = String(raw || '').toUpperCase().replace(/\s+/g, '').replace(/[–—]/g, '-');
+      const m = c.match(/^YP(05|10)-?([A-Z2-9]{4})-?([A-Z2-9])([A-Z2-9]{3})$/);
+      if (!m) return null;
+      const r = m[2] + m[3];
+      if (sum('YP' + m[1] + r) !== m[4]) return null;
+      return { code: 'YP' + m[1] + '-' + m[2] + '-' + m[3] + m[4], off: OFFS[m[1]] };
+    }
+    function applied() { try { return check(localStorage.getItem('yp_promo')); } catch (e) { return null; } }
+    function setApplied(code) { try { code ? localStorage.setItem('yp_promo', code) : localStorage.removeItem('yp_promo'); } catch (e) {} }
+    return { make, check, applied, setApplied };
+  })();
+  window.YPPromo = YPPromo;
+
+  function promoDiscount(total) { const p = YPPromo.applied(); return p ? Math.round(total * p.off / 100) : 0; }
+  function renderPromoMsg(text, kind) {
+    const el = document.getElementById('promoMsg'); if (!el) return;
+    const p = YPPromo.applied();
+    if (text) { el.className = 'promo-msg ' + (kind || ''); el.textContent = text; return; }
+    if (p) { el.className = 'promo-msg ok'; el.innerHTML = 'Промокод <b>' + p.code + '</b> — −' + p.off + '%<button type="button" onclick="removePromo()">убрать</button>'; }
+    else { el.className = 'promo-msg'; el.textContent = ''; }
+  }
+  function applyPromo() {
+    const inp = document.getElementById('promoInput');
+    const val = inp.value.trim();
+    if (!val) { renderPromoMsg('Введи промокод', 'bad'); return; }
+    const p = YPPromo.check(val);
+    if (!p) { renderPromoMsg('Такого промокода нет', 'bad'); return; }
+    YPPromo.setApplied(p.code); inp.value = '';
+    renderCart(); renderPromoMsg();
+    showToast('Промокод применён −' + p.off + '%');
+  }
+  function removePromo() { YPPromo.setApplied(null); renderCart(); renderPromoMsg(); }
+
   // ---- Checkout flow ----
   function coTotal() {
     return cart.reduce((s, c) => {
@@ -2407,21 +2488,15 @@
   }
   function coItemsCount() { return cart.reduce((s, c) => s + c.qty, 0); }
 
-  // Скидка, выигранная в мини-игре (лучшая из открытых). Цену не меняет — подтверждается вручную.
-  function gameReward() {
-    try {
-      const g = JSON.parse(localStorage.getItem('yp_game') || '{}');
-      const all = [{ at: 5000, code: 'YP5000', off: 10 }, { at: 1000, code: 'YP1000', off: 5 }];
-      return all.find(r => (g.best || 0) >= r.at) || null;
-    } catch (e) { return null; }
-  }
+  // Итог с промокодом
+  function coFinal() { const t = coTotal(); return t - promoDiscount(t); }
   function gameRewardRow() {
-    const r = gameReward();
-    return r ? `<div class="co-summary-row"><span>Скидка из игры (${r.code})</span><span>−${r.off}%</span></div>` : '';
+    const p = YPPromo.applied(); if (!p) return '';
+    return `<div class="co-summary-row"><span>Промокод ${p.code}</span><span>−${formatPrice(promoDiscount(coTotal()))}</span></div>`;
   }
   function withPromo(note) {
-    const r = gameReward();
-    const line = r ? `Промокод из игры: ${r.code} (−${r.off}%)` : '';
+    const p = YPPromo.applied();
+    const line = p ? `Промокод: ${p.code} (−${p.off}%, −${formatPrice(promoDiscount(coTotal()))}). Итого со скидкой: ${formatPrice(coFinal())}` : '';
     return [note || '', line].filter(Boolean).join('\n');
   }
 
@@ -2478,7 +2553,7 @@
       <div class="co-summary">
         <div class="co-summary-row"><span>Товаров</span><span>${coItemsCount()} шт</span></div>
         ${gameRewardRow()}
-        <div class="co-summary-row total"><span>Итого</span><span>${formatPrice(coTotal())}</span></div>
+        <div class="co-summary-row total"><span>Итого</span><span>${formatPrice(coFinal())}</span></div>
       </div>
       <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="goPayment()">
         Перейти к оплате
@@ -2614,7 +2689,7 @@
         <div class="co-summary-row"><span>Товаров</span><span>${coItemsCount()} шт</span></div>
         <div class="co-summary-row"><span>Доставка</span><span>по тарифу</span></div>
         ${gameRewardRow()}
-        <div class="co-summary-row total"><span>К оплате</span><span>${formatPrice(coTotal())}</span></div>
+        <div class="co-summary-row total"><span>К оплате</span><span>${formatPrice(coFinal())}</span></div>
       </div>
       <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="placeOrder()">
         Оформить заказ
@@ -2653,7 +2728,7 @@
       } catch (e) { /* сервер недоступен — ниже запасной вариант через Telegram */ }
       orderSending = false;
     }
-    const total = coTotal();
+    const total = coFinal();
     const count = coItemsCount();
     const contact = (checkoutData && checkoutData.contact) ? checkoutData.contact : '';
     const d = checkoutData || {};
@@ -2663,6 +2738,7 @@
     }).join('\n') + '\nИтого: ' + formatPrice(total) +
       '\n\nИмя: ' + (d.name || '') + '\nКонтакт: ' + (d.contact || '') + '\nГород: ' + (d.city || '') + '\nАдрес: ' + (d.addr || '') + (withPromo(d.note) ? '\nКомментарий: ' + withPromo(d.note) : '');
     cart = [];
+    YPPromo.setApplied(null); // промокод одноразовый для этого браузера
     renderCart();
     document.getElementById('checkoutTitle').textContent = 'Заказ оформлен';
     const body = document.getElementById('checkoutBody');
@@ -3261,11 +3337,19 @@
   var TOUCH = window.matchMedia('(hover: none)').matches;
 
   // ---------- рекорд и награды ----------
-  var REWARDS = [{ at: 1000, code: 'YP1000', off: 5 }, { at: 5000, code: 'YP5000', off: 10 }];
+  var REWARDS = [{ at: 5000, off: 5 }, { at: 10000, off: 10 }];
   var save = {};
   try { save = JSON.parse(localStorage.getItem('yp_game') || '{}') || {}; } catch (e) { save = {}; }
   save.best = save.best || 0;
   function store() { try { localStorage.setItem('yp_game', JSON.stringify(save)); } catch (e) {} }
+  // уникальный промокод на каждую открытую награду — генерится один раз и хранится у игрока
+  function codeFor(r) {
+    var P = window.YPPromo; if (!P) return '';
+    save.codes = save.codes || {};
+    var c = P.check(save.codes[r.at]);
+    if (!c || c.off !== r.off) { save.codes[r.at] = P.make(r.off); store(); }
+    return save.codes[r.at];
+  }
   function fmt(n) { return Math.floor(n).toLocaleString('ru-RU'); }
 
   // ---------- размеры ----------
@@ -3284,7 +3368,7 @@
   var clouds = [], trees = [], petals = [], mascot = null, nextMascot = 6, scroll = 0, t = 0;
   function initScene() {
     clouds = []; trees = []; petals = [];
-    for (var i = 0; i < 6; i++) clouds.push({ k: 'cloud' + (1 + i % 4), x: Math.random() * W, y: H * (0.08 + Math.random() * 0.45), sp: 0.04 + Math.random() * 0.06, sc: 0.5 + Math.random() * 0.6, a: 0.25 + Math.random() * 0.35 });
+    for (var i = 0; i < 6; i++) clouds.push({ k: 'cloud' + (1 + i % 4), x: Math.random() * W, y: H * (0.08 + Math.random() * 0.45), sp: 0.04 + Math.random() * 0.06, sc: 0.5 + Math.random() * 0.6, a: 0.15 + Math.random() * 0.25 });
     trees.push({ x: W * 0.55, sc: 1 });
     for (var j = 0; j < 46; j++) petals.push(newPetal(true));
   }
@@ -3329,29 +3413,67 @@
       g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
       src.connect(f); f.connect(g); g.connect(bus); src.start(t0, Math.random() * 0.5); src.stop(t0 + dur + 0.02);
     }
-    // ---- трек: ля минор, Am – F – C – G, 16 шагов на такт ----
-    var CHORDS = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
-    var ARP = [0, 1, 2, 1, 0, 2, 1, 2, 0, 1, 2, 3, 2, 1, 0, 2];
-    var LEAD = [76, -1, 74, 72, -1, 72, 74, -1, 76, -1, 79, -1, 77, 76, 74, -1]; // мотив (−1 — пауза)
-    var playing = false, step = 0, nextT = 0, timer = null, bpm = 132;
+    // ---- несколько своих треков: каждый забег — случайный, каждые 16 тактов — смена на другой ----
+    // аккорды — MIDI-ноты, arp — индексы нот аккорда (3 = октава выше), lead — мотив (−1 пауза), drums — рисунок
+    var TRACKS = [
+      { name: 'Night Run',  bpm: 132, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]],      // Am F C G
+        arp: [0, 1, 2, 1, 0, 2, 1, 2, 0, 1, 2, 3, 2, 1, 0, 2], lead: [76, -1, 74, 72, -1, 72, 74, -1, 76, -1, 79, -1, 77, 76, 74, -1],
+        drums: 'four', bass: 'eighth', wave: 'square' },
+      { name: 'Ruins',      bpm: 140, chords: [[50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 49, 52]],      // Dm Bb C A
+        arp: [0, 2, 1, 3, 0, 2, 1, 3, 0, 2, 1, 3, 2, 1, 2, 3], lead: [74, 74, -1, 72, 69, -1, 70, -1, 69, -1, 65, 67, 69, -1, 72, -1],
+        drums: 'break', bass: 'octave', wave: 'sawtooth' },
+      { name: 'Sakura',     bpm: 126, chords: [[52, 55, 59], [48, 52, 55], [55, 59, 62], [50, 54, 57]],      // Em C G D
+        arp: [0, 1, 2, 3, 2, 1, 0, 1, 0, 1, 2, 3, 2, 1, 0, 2], lead: [71, -1, -1, 74, 76, -1, 74, 71, -1, 69, 67, -1, 69, -1, 71, -1],
+        drums: 'four', bass: 'pulse', wave: 'triangle' },
+      { name: 'Void',       bpm: 146, chords: [[53, 56, 60], [49, 53, 56], [51, 55, 58], [48, 52, 55]],      // Fm Db Eb C
+        arp: [0, 0, 2, 0, 1, 0, 2, 3, 0, 0, 2, 0, 1, 3, 2, 1], lead: [77, -1, 80, -1, 79, 77, -1, 75, -1, 72, -1, 75, 77, -1, -1, -1],
+        drums: 'drive', bass: 'gallop', wave: 'square' }
+    ];
+    var playing = false, step = 0, nextT = 0, timer = null, pace = 1, cur = TRACKS[0], curIdx = 0;
+    function bpmNow() { return cur.bpm + (pace - 1) * 22; }
+    function pickTrack(notIdx) {
+      var i; do { i = Math.floor(Math.random() * TRACKS.length); } while (TRACKS.length > 1 && i === notIdx);
+      curIdx = i; cur = TRACKS[i];
+    }
+    function kick(t) {
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+      g.gain.setValueAtTime(1, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.connect(g); g.connect(musicBus); o.start(t); o.stop(t + 0.25);
+    }
+    var DRUMS = {
+      four:  { k: [0, 4, 8, 12], c: [4, 12], h: [1, 3, 5, 7, 9, 11, 13, 15] },
+      break: { k: [0, 6, 10], c: [4, 12], h: [0, 2, 4, 6, 8, 10, 12, 14, 15] },
+      drive: { k: [0, 3, 6, 8, 11, 14], c: [4, 12], h: [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15] }
+    };
     function schedStep(n, t) {
-      var bar = Math.floor(n / 16) % 4, s16 = n % 16, ch = CHORDS[bar], sec = 60 / bpm / 4;
-      var section = Math.floor(n / 64) % 4; // каждые 4 такта добавляется слой
-      if (s16 % 4 === 0) { // бочка
-        var o = ac.createOscillator(), g = ac.createGain();
-        o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
-        g.gain.setValueAtTime(1, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-        o.connect(g); g.connect(musicBus); o.start(t); o.stop(t + 0.25);
+      var local = n % 256;                       // 16 тактов на трек
+      if (n > 0 && local === 0) {                // смена трека с «подъёмом»
+        pickTrack(curIdx);
+        tone(musicBus, 'sawtooth', 200, t - 0.4, 0.4, 0.05, { to: 1600, lp: 4000 });
       }
-      if (s16 === 4 || s16 === 12) noise(musicBus, t, 0.14, 0.35, 'bandpass', 1800, 0.8);       // хлопок
-      if (s16 % 2 === 1) noise(musicBus, t, 0.04, 0.14, 'highpass', 8000, 0.7);                 // хэт
-      if (s16 % 2 === 0) tone(musicBus, 'sawtooth', hz(ch[0] - 24), t, sec * 1.8, 0.22, { lp: 500 + section * 250, q: 6 }); // бас
-      tone(musicBus, 'square', hz(ch[ARP[s16] % 3] + 12 * (ARP[s16] === 3 ? 2 : 1)), t, sec * 0.9, 0.06, { lp: 2600 }); // арпеджио
-      if (section >= 1 && LEAD[s16] > 0 && bar % 2 === 1) tone(musicBus, 'sawtooth', hz(LEAD[s16]), t, sec * 1.9, 0.07, { lp: 3200, detune: 7 }); // мелодия
-      if (section >= 2 && s16 === 0) ch.forEach(function (m) { tone(musicBus, 'triangle', hz(m + 12), t, sec * 15, 0.04, { att: 0.08 }); }); // подложка
+      var bar = Math.floor(local / 16) % 4, s16 = n % 16, ch = cur.chords[bar], sec = 60 / bpmNow() / 4;
+      var section = Math.floor(local / 64);      // каждые 4 такта добавляется слой
+      var dr = DRUMS[cur.drums];
+      var fill = Math.floor(local / 16) % 4 === 3 && s16 >= 12; // сбивка в конце каждой фразы
+      if (dr.k.indexOf(s16) >= 0 && !(fill && s16 > 12)) kick(t);
+      if (dr.c.indexOf(s16) >= 0 || (fill && s16 % 1 === 0 && s16 >= 13)) noise(musicBus, t, 0.12, fill ? 0.25 : 0.35, 'bandpass', fill ? 2400 : 1800, 0.8);
+      if (dr.h.indexOf(s16) >= 0) noise(musicBus, t, 0.04, 0.13, 'highpass', 8000, 0.7);
+      // бас
+      var root = ch[0] - 24, lp = 500 + section * 250;
+      if (cur.bass === 'eighth' && s16 % 2 === 0) tone(musicBus, 'sawtooth', hz(root), t, sec * 1.8, 0.22, { lp: lp, q: 6 });
+      if (cur.bass === 'octave' && s16 % 2 === 0) tone(musicBus, 'sawtooth', hz(root + (s16 % 4 ? 12 : 0)), t, sec * 1.7, 0.2, { lp: lp, q: 6 });
+      if (cur.bass === 'pulse' && s16 % 4 !== 1) tone(musicBus, 'square', hz(root), t, sec * 0.9, 0.12, { lp: lp, q: 4 });
+      if (cur.bass === 'gallop' && [0, 3, 4, 7, 8, 11, 12, 15].indexOf(s16) >= 0) tone(musicBus, 'sawtooth', hz(root), t, sec * 0.9, 0.22, { lp: lp + 300, q: 7 });
+      // арпеджио
+      var a = cur.arp[s16];
+      tone(musicBus, cur.wave, hz(ch[a % 3] + 12 * (a === 3 ? 2 : 1)), t, sec * 0.9, cur.wave === 'triangle' ? 0.1 : 0.06, { lp: 2600 });
+      // мелодия и подложка
+      if (section >= 1 && cur.lead[s16] > 0 && bar % 2 === 1) tone(musicBus, 'sawtooth', hz(cur.lead[s16]), t, sec * 1.9, 0.07, { lp: 3200, detune: 7 });
+      if (section >= 2 && s16 === 0) ch.forEach(function (m) { tone(musicBus, 'triangle', hz(m + 12), t, sec * 15, 0.04, { att: 0.08 }); });
     }
     function tick() {
-      while (nextT < ac.currentTime + 0.12) { schedStep(step, nextT); nextT += 60 / bpm / 4; step++; }
+      while (nextT < ac.currentTime + 0.12) { schedStep(step, nextT); nextT += 60 / bpmNow() / 4; step++; }
     }
     return {
       init: init,
@@ -3360,8 +3482,9 @@
       setSfx: function (on) { pref.sfx = on; savePref(); if (ac) sfxBus.gain.setTargetAtTime(on ? 0.9 : 0, ac.currentTime, 0.05); },
       pause: function () { if (ac && ac.state === 'running') ac.suspend(); },
       resume: function () { if (ac && ac.state === 'suspended') ac.resume(); },
-      setTempo: function (p) { bpm = 132 + (p - 1) * 22; },
-      startMusic: function () { if (!init() || playing) return; playing = true; step = 0; nextT = ac.currentTime + 0.06; timer = setInterval(tick, 25); },
+      setTempo: function (p) { pace = p; },
+      trackName: function () { return cur.name; },
+      startMusic: function () { if (!init() || playing) return; pickTrack(-1); playing = true; step = 0; nextT = ac.currentTime + 0.06; timer = setInterval(tick, 25); },
       stopMusic: function () { playing = false; clearInterval(timer); },
       hit: function (perfect, combo) {
         if (!ac) return; var t = ac.currentTime, scale = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24];
@@ -3408,19 +3531,50 @@
     var d = diff(), h = hitPt();
     var heal = hits >= healEvery && Math.random() < 0.7;
     if (heal) { hits = 0; healEvery = 12 + Math.floor(Math.random() * 8); }
-    var T = d.T * (heal ? 1.25 : 1) * (0.9 + Math.random() * 0.2);
+    // характер полёта, как у атак боссов: прямой, задержка-замах, рывок, финт, рваный
+    var kinds = ['line', 'delay', 'rush', 'feint', 'stutter'];
+    var weird = Math.min(0.35 + (pace - 1) * 0.3, 0.8); // чем дальше — тем чаще «нечестные» шары
+    var kind = heal ? 'float' : (Math.random() < weird ? kinds[1 + Math.floor(Math.random() * 4)] : 'line');
+    var slow = { line: 1, delay: 1.55, rush: 1.15, feint: 1.4, stutter: 1.35, float: 1.5 }[kind];
+    var T = d.T * slow * (0.75 + Math.random() * 0.6);
     var arrive = t + T;
     if (arrive < lastArrive + d.minSpace) { T += lastArrive + d.minSpace - arrive; arrive = t + T; }
     lastArrive = arrive;
-    balls.push({ heal: heal, x0: W * (0.62 + Math.random() * 0.45), y0: -40, tx: h.x, ty: h.y, T: T, age: 0, arc: (Math.random() - 0.5) * 120 * s,
-                 st: 'in', x: 0, y: 0, vx: 0, vy: 0, r: (heal ? 30 : 15) * s * 1.4, trail: [], spin: 0 });
-    if (heal && !healHinted) { healHinted = true; addText('хилка — не бей, пусть долетит', W / 2, H * 0.32, 2.4, 13); }
+    balls.push({ heal: heal, kind: kind, x0: W * (0.62 + Math.random() * 0.45), y0: -40, tx: h.x, ty: h.y, T: T, age: 0, arc: (Math.random() - 0.5) * 120 * s,
+                 hold: 0.35 + Math.random() * 0.25, st: 'in', x: 0, y: 0, vx: 0, vy: 0, r: (heal ? 34 : 15) * s * 1.4, trail: [], spin: 0, charge: 0, rot: 0 });
+    if (heal && !healHinted) { healHinted = true; addText('чокопай — не бей, пусть долетит', W / 2, H * 0.32, 2.4, 13); }
+  }
+  // время полёта u (0..1) → пройденная доля пути. Всегда 1 в момент удара, но путь до него разный
+  function ease(x) { return x * x * (3 - 2 * x); }
+  function prog(b, u) {
+    switch (b.kind) {
+      case 'delay': // долетает до середины, зависает «замахом» и резко бьёт
+        var h0 = b.hold, h1 = Math.min(b.hold + 0.3, 0.72);
+        if (u < h0) return 0.5 * ease(u / h0);
+        if (u < h1) return 0.5 + 0.02 * Math.sin((u - h0) * 40);
+        return 0.5 + 0.5 * Math.pow((u - h1) / (1 - h1), 1.6);
+      case 'rush': // медленно подкрадывается, потом рывок
+        return Math.pow(u, 2.7);
+      case 'feint': // быстро летит, отскакивает назад и возвращается
+        if (u < 0.35) return 0.62 * ease(u / 0.35);
+        if (u < 0.6) return 0.62 - 0.22 * ease((u - 0.35) / 0.25);
+        return 0.4 + 0.6 * Math.pow((u - 0.6) / 0.4, 1.3);
+      case 'stutter': // рвано: рывок — стоп — рывок
+        var k = 4, seg = Math.min(Math.floor(u * k), k - 1), f = u * k - seg;
+        return (seg + ease(Math.min(f * 1.7, 1))) / k;
+      case 'float': // чокопай плывёт плавно и предсказуемо
+        return ease(u);
+      default: return u;
+    }
   }
   function ballPos(b) {
     var late = 0.24 * b.T;
     if (b.age <= b.T) {
-      var u = b.age / b.T;
-      b.x = b.x0 + (b.tx - b.x0) * u; b.y = b.y0 + (b.ty - b.y0) * u - Math.sin(Math.PI * u) * b.arc;
+      var u = b.age / b.T, pr = prog(b, u), was = b.pr || 0;
+      b.charge = b.st === 'in' && pr - was < 0.0015 && u > 0.05 && u < 0.95 ? Math.min(b.charge + 0.08, 1) : Math.max(b.charge - 0.1, 0); // «заряд», когда завис
+      b.pr = pr;
+      var wob = b.kind === 'float' ? Math.sin(b.age * 4) * 18 * s : 0;
+      b.x = b.x0 + (b.tx - b.x0) * pr + wob; b.y = b.y0 + (b.ty - b.y0) * pr - Math.sin(Math.PI * pr) * b.arc;
     } else {
       var v = Math.min((b.age - b.T) / late, 1), bp = bodyPt();
       b.x = b.tx + (bp.x - b.tx) * v; b.y = b.ty + (bp.y - b.ty) * v;
@@ -3428,7 +3582,7 @@
     }
     return false;
   }
-  function hittable(b) { return b.st === 'in' && b.age > b.T - 0.26 * b.T && b.age < b.T + 0.2 * b.T; }
+  function hittable(b) { return b.st === 'in' && b.age > b.T - 0.26 * b.T && b.age < b.T + 0.2 * b.T && (b.age > b.T || (b.pr || 0) > 0.82); }
 
   // ---------- эффекты ----------
   function burst(x, y, n, pow) {
@@ -3454,7 +3608,7 @@
     if (!best) { AU.whiff(); combo = 0; cooldown = 0.3; addText('мимо', hitPt().x + 30 * s, hitPt().y - 30 * s, 0.6, 13); updateHud(); return; }
     var hp = hitPt();
     if (best.heal) {
-      AU.broke(); best.st = 'dead'; burst(best.x, best.y, 18, 0.7); addText('хилка разбита', best.x, best.y - 30, 0.9, 13); combo = 0; updateHud(); return;
+      AU.broke(); best.st = 'dead'; burst(best.x, best.y, 18, 0.7); addText('чокопай разбит', best.x, best.y - 30, 0.9, 13); combo = 0; updateHud(); return;
     }
     var perfect = bd < 0.075;
     best.st = 'out'; best.x = hp.x; best.y = hp.y;
@@ -3499,24 +3653,30 @@
     state = 'idle'; hud.classList.remove('on');
     scr.innerHTML = '<div class="yg-label">— другое измерение —</div><h3>БЕГИ.<br>БЕЙ.</h3>' +
       '<p>Шар летит сверху — <b>' + (TOUCH ? 'тапай по экрану' : 'кликай (ЛКМ)') + '</b>, когда он подлетает к тебе, и отбивай. Чем точнее — тем больше очков.<br>' +
-      'Белую <b>хилку не бей</b> — пусть долетит, это +1 жизнь.' + (TOUCH ? '' : '<br><b>M</b> — музыка вкл/выкл.') + '</p>' + rewardsHtml() +
+      '<b>Чокопай не бей</b> — пусть долетит, это +1 жизнь.' + (TOUCH ? '' : '<br><b>M</b> — музыка вкл/выкл.') + '</p>' + rewardsHtml() +
       (save.best ? '<p>рекорд — <b>' + fmt(save.best) + '</b></p>' : '') + '<div class="yg-go">' + (TOUCH ? 'тапни' : 'кликни') + ', чтобы начать</div>';
     scr.classList.remove('hide');
   }
-  function start() { reset(); AU.setTempo(1); AU.startMusic(); newReward = null; state = 'play'; scr.classList.add('hide'); hud.classList.add('on'); updateHud(); }
+  function start() { reset(); AU.setTempo(1); AU.startMusic(); newReward = null; state = 'play'; scr.classList.add('hide'); hud.classList.add('on'); updateHud();
+    if (AU.pref.music) addText('♪ ' + AU.trackName(), W / 2, H * 0.24, 1.8, 13); }
   function gameOver() {
     state = 'over'; screenLock = t + 0.9; deadAt = t; swing = null; AU.stopMusic(); AU.over();
     var rec = score > save.best;
     if (rec) { save.best = Math.floor(score); store(); }
     var got = REWARDS.filter(function (r) { return save.best >= r.at; }).pop();
+    var code = got ? codeFor(got) : '', autoApplied = false;
+    if (code && window.YPPromo) {
+      var cur = YPPromo.applied();
+      if (!cur || cur.off < got.off) { YPPromo.setApplied(code); autoApplied = true; if (typeof renderCart === 'function') renderCart(); }
+    }
     scr.innerHTML = '<div class="yg-label">— конец забега —</div><h3>' + fmt(score) + '</h3>' +
       '<p>' + (rec ? '<b>новый рекорд!</b>' : 'рекорд — <b>' + fmt(save.best) + '</b>') + '</p>' + rewardsHtml() +
-      (got ? '<p>Твоя скидка <b>−' + got.off + '%</b>. Промокод сам подставится при оформлении заказа:</p>' +
-             '<div class="yg-code" id="ygCode" title="Скопировать">' + got.code + '</div>' : '') +
+      (got ? '<p>Твоя скидка <b>−' + got.off + '%</b>. Это твой личный промокод' + (autoApplied ? ' — он уже применён в корзине' : '') + ':</p>' +
+             '<div class="yg-code" id="ygCode" title="Скопировать">' + code + '</div>' : '') +
       '<div class="yg-go">' + (TOUCH ? 'тапни' : 'кликни') + ', чтобы ещё раз</div>';
     scr.classList.remove('hide'); hud.classList.remove('on');
     var c = document.getElementById('ygCode');
-    if (c) c.addEventListener('pointerdown', function (e) { e.stopPropagation(); try { navigator.clipboard.writeText(got.code); c.textContent = 'скопировано'; } catch (er) {} });
+    if (c) c.addEventListener('pointerdown', function (e) { e.stopPropagation(); try { navigator.clipboard.writeText(code); c.textContent = 'скопировано'; } catch (er) {} });
   }
   scr.addEventListener('pointerdown', function (e) { if (e.target === scr) press(); });
   function updateHud() {
@@ -3601,7 +3761,7 @@
       var ew = W < 700 ? W * 1.35 : Math.min(W * 0.78, 1000), eh = ew * IMG.eyes.height / IMG.eyes.width;
       var blink = (t % 5.5) > 5.35 ? 0.15 : 1; // иногда моргают
       ctx.save();
-      ctx.globalAlpha = eyesA * 0.45 * blink;
+      ctx.globalAlpha = eyesA * 0.3 * blink;
       ctx.translate(W / 2, H * 0.36 + Math.sin(t * 0.7) * 6);
       ctx.scale(1 + (1 - eyesA) * 0.15, 1 + (1 - eyesA) * 0.15);
       ctx.drawImage(IMG.eyes, -ew / 2, -eh / 2, ew, eh);
@@ -3613,7 +3773,7 @@
       var mg = ctx.createRadialGradient(mx + mw / 2, my + mh / 2, 0, mx + mw / 2, my + mh / 2, mw * 1.6);
       mg.addColorStop(0, 'rgba(200,215,255,.10)'); mg.addColorStop(1, 'rgba(200,215,255,0)');
       ctx.fillStyle = mg; ctx.fillRect(mx - mw, my - mw, mw * 3, mw * 3);
-      ctx.globalAlpha = 0.85; ctx.drawImage(IMG.moon, mx, my, mw, mh); ctx.globalAlpha = 1;
+      ctx.globalAlpha = 0.6; ctx.drawImage(IMG.moon, mx, my, mw, mh); ctx.globalAlpha = 1;
     }
     // облака
     clouds.forEach(function (c) {
@@ -3635,7 +3795,7 @@
     // деревья
     if (ok(IMG.tree)) trees.forEach(function (tr) {
       var th = H * 0.36 * tr.sc, tw = th * IMG.tree.width / IMG.tree.height;
-      ctx.globalAlpha = 0.55 * (1 - eyesA * 0.6); ctx.drawImage(IMG.tree, tr.x, groundY - th + 6, tw, th);
+      ctx.globalAlpha = 0.3 * (1 - eyesA * 0.6); ctx.drawImage(IMG.tree, tr.x, groundY - th + 6, tw, th);
     });
     ctx.globalAlpha = 1;
     // лепестки
@@ -3675,18 +3835,30 @@
     ctx.globalAlpha = 1;
     // шары
     balls.forEach(function (b) {
-      for (var i = 0; i < b.trail.length; i++) {
+      if (!b.heal) for (var i = 0; i < b.trail.length; i++) {
         var p = b.trail[i]; ctx.globalAlpha = (i / b.trail.length) * 0.25;
         ctx.fillStyle = '#c8d4ff'; ctx.beginPath(); ctx.arc(p.x, p.y, b.r * (0.35 + i / b.trail.length * 0.5), 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
       if (b.heal && ok(IMG.heal)) {
-        var hw = b.r * 2.6, hh = hw * IMG.heal.height / IMG.heal.width, pulse = 1 + Math.sin(t * 8) * 0.06;
-        var hg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, hw);
-        hg.addColorStop(0, 'rgba(255,255,255,.25)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = hg; ctx.fillRect(b.x - hw, b.y - hw, hw * 2, hw * 2);
-        ctx.drawImage(IMG.heal, b.x - hw * pulse / 2, b.y - hh * pulse / 2, hw * pulse, hh * pulse);
+        // чокопай: крупная, на тёмной подложке с тёплым розовым свечением — не спутать с шаром
+        var hw = b.r * 3.2, hh = hw * IMG.heal.height / IMG.heal.width, pulse = 1 + Math.sin(t * 5) * 0.05;
+        var hg = ctx.createRadialGradient(b.x, b.y, b.r * 0.6, b.x, b.y, hw * 0.9);
+        hg.addColorStop(0, 'rgba(255,170,215,.45)'); hg.addColorStop(1, 'rgba(255,170,215,0)');
+        ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(b.x, b.y, hw * 0.9, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#07060a'; ctx.beginPath(); ctx.arc(b.x, b.y, hw * 0.42 * pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,190,225,.9)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 5]);
+        ctx.beginPath(); ctx.arc(b.x, b.y, hw * 0.5 * pulse, t * 1.5, t * 1.5 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(Math.sin(t * 2) * 0.25);
+        ctx.drawImage(IMG.heal, -hw * pulse / 2, -hh * pulse / 2, hw * pulse, hh * pulse); ctx.restore();
+        ctx.fillStyle = '#ffd3ea'; ctx.font = '700 ' + Math.round(13 + 4 * s) + 'px "JetBrains Mono", monospace'; ctx.textAlign = 'center';
+        ctx.fillText('+1 ♥', b.x, b.y - hw * 0.55);
       } else {
+        if (b.charge > 0.05) { // «замах»: сжимающееся кольцо, пока шар завис
+          ctx.globalAlpha = b.charge; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(b.x, b.y, b.r * (1.5 + 1.6 * (1 - b.charge) + Math.sin(t * 30) * 0.08), 0, Math.PI * 2); ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
         var bg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 2.4);
         bg.addColorStop(0, 'rgba(210,222,255,.35)'); bg.addColorStop(1, 'rgba(210,222,255,0)');
         ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 2.4, 0, Math.PI * 2); ctx.fill();
