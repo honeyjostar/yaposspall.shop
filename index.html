@@ -557,6 +557,34 @@
     .product:hover .scrub-bars { opacity: 1; }
   }
 
+  /* Выбор размера прямо на карточке каталога */
+  .size-pick { position: absolute; inset: auto 0 0 0; z-index: 4; background: rgba(0,0,0,.9); backdrop-filter: blur(4px);
+    border-top: 1px solid var(--line-strong); padding: 14px 12px 12px; animation: spUp .2s ease; cursor: default; }
+  @keyframes spUp { from { transform: translateY(100%); } to { transform: none; } }
+  .size-pick-label { font-size: .58rem; letter-spacing: .3em; text-transform: uppercase; color: #aaa; margin-bottom: 10px; text-align: center; }
+  .size-pick-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .size-pick-row button { min-width: 42px; padding: 9px 8px; background: transparent; border: 1px solid var(--line-strong); color: #fff;
+    font-size: .72rem; font-weight: 600; letter-spacing: .05em; }
+  .size-pick-row button:hover { background: #fff; color: #000; }
+  .size-pick-close { position: absolute; top: 4px; right: 8px; background: none; border: none; color: #888; font-size: 1.1rem; padding: 4px; }
+  /* Характеристики в карточке товара */
+  .pm-features { list-style: none; margin: 0 0 18px; padding: 0; }
+  .pm-features li { font-size: .78rem; color: #ccc; padding: 3px 0 3px 16px; position: relative; }
+  .pm-features li::before { content: ''; position: absolute; left: 2px; top: 11px; width: 6px; height: 1px; background: #fff; }
+  .pm-specs { margin: 0 0 22px; border-top: 1px solid var(--line); }
+  .pm-specs div { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: .74rem; }
+  .pm-specs dt { color: var(--muted); letter-spacing: .08em; }
+  .pm-specs dd { margin: 0; text-align: right; color: #ddd; }
+  .pm-desc code { font-family: 'JetBrains Mono', monospace; font-size: .9em; color: #fff; }
+  .pm-add:disabled { opacity: .45; cursor: not-allowed; }
+  /* Цена не рвётся на две строки; на телефоне кнопка уходит под цену */
+  .product-price { white-space: nowrap; }
+  @media (max-width: 600px) {
+    .product-bottom { flex-direction: column; align-items: stretch; gap: 10px; }
+    .product-add { width: 100%; text-align: center; padding: 9px 0; }
+    .product-bottom .product-price { text-align: left; }
+  }
+
   /* Карточка-загадка: следующий дроп */
   .product.mystery { cursor: default; }
   .product.mystery:hover { transform: none; }
@@ -591,10 +619,11 @@
 
   /* Cookie-баннер */
   .yp-cookie {
-    position: fixed; left: 24px; bottom: 24px; z-index: 290;
-    width: min(360px, calc(100vw - 32px));
+    position: fixed; left: 20px; bottom: 20px; z-index: 290;
+    width: min(330px, calc(100vw - 32px));
+    display: flex; align-items: center; gap: 14px;
     background: rgba(0,0,0,.92); border: 1px solid var(--line-strong);
-    padding: 20px 22px; backdrop-filter: blur(6px);
+    padding: 10px 10px 10px 14px; backdrop-filter: blur(6px);
     opacity: 0; transform: translateY(16px); visibility: hidden;
     transition: opacity .4s, transform .4s, visibility .4s;
   }
@@ -608,14 +637,14 @@
     font-family: 'JetBrains Mono', monospace; font-size: .58rem;
     letter-spacing: .38em; text-transform: uppercase; color: #8a84a0; margin-bottom: 10px;
   }
-  .yp-cookie p { font-size: .78rem; line-height: 1.6; color: #bbb; margin-bottom: 16px; }
+  .yp-cookie p { font-size: .7rem; line-height: 1.45; color: #aaa; margin: 0; flex: 1; }
   .yp-cookie button {
-    width: 100%; background: #fff; color: #000; border: 1px solid #fff;
-    padding: 11px 0; font-size: .66rem; font-weight: 700; letter-spacing: .3em; text-transform: uppercase;
+    flex: none; background: #fff; color: #000; border: 1px solid #fff;
+    padding: 8px 16px; font-size: .62rem; font-weight: 700; letter-spacing: .3em; text-transform: uppercase;
     transition: background .2s, color .2s;
   }
   .yp-cookie button:hover { background: transparent; color: #fff; }
-  @media (max-width: 600px) { .yp-cookie { left: 16px; right: 16px; bottom: 16px; width: auto; } }
+  @media (max-width: 600px) { .yp-cookie { left: 10px; right: 10px; bottom: 10px; width: auto; } }
 
   .product-badge {
     position: absolute;
@@ -921,10 +950,14 @@
     margin-bottom: 8px;
     display: block;
     transition: opacity 0.2s;
-    word-break: break-word;
+    overflow-wrap: normal;
+    word-break: normal;
     letter-spacing: -0.01em;
   }
   .contact-value:hover { opacity: 0.6; }
+  .contact-mail { font-size: clamp(1rem, 1.25vw, 1.25rem); }      /* почта целиком, перенос только перед @ */
+  .contact-steps { font-size: 1.05rem; line-height: 1.4; }
+  .contact-steps:hover { opacity: 1; }
   .contact-detail {
     font-size: 0.82rem;
     color: var(--muted);
@@ -1923,22 +1956,22 @@
       <div class="section-num">— 03 / Контакты —</div>
       <h2 class="section-title">Связь</h2>
     </div>
-    <div class="section-meta">По настроению</div>
+    <div class="section-meta">Отвечаем в течение дня</div>
   </div>
   <div class="contact-grid">
     <div class="contact-block">
       <div class="contact-label">— Поддержка —</div>
-      <a href="mailto:yaposspallshopsupport@gmail.com" class="contact-value">yaposspallshopsupport@gmail.com</a>
+      <a href="mailto:yaposspallshopsupport@gmail.com" class="contact-value contact-mail">yaposspallshopsupport<wbr>@gmail.com</a>
       <div class="contact-detail">Вопросы по заказам, размерам, доставке. Отвечаем до 24 часов.</div>
     </div>
     <div class="contact-block">
-      <div class="contact-label">— Сайт —</div>
-      <a href="https://yaposspall.shop/" class="contact-value">yaposspall.shop</a>
-      <div class="contact-detail">Магазин и личная страница в одном месте.</div>
+      <div class="contact-label">— Как заказать —</div>
+      <div class="contact-value contact-steps">Корзина → подтверждение → оплата</div>
+      <div class="contact-detail">Оформи заказ на сайте — мы напишем тебе, подтвердим размер и доставку и пришлём реквизиты для оплаты.</div>
     </div>
     <div class="contact-block">
       <div class="contact-label">— Telegram —</div>
-      <a href="https://t.me/YPsupport" target="_blank" rel="noopener" class="contact-value">@YPsupport</a>
+      <a href="https://t.me/Japanguy" target="_blank" rel="noopener" class="contact-value">@Japanguy</a>
       <div class="contact-detail">Поддержка и связь напрямую. Пиши — отвечу.</div>
     </div>
   </div>
@@ -2096,7 +2129,7 @@
           <li><a href="#about">Оракул</a></li>
           <li><a href="#contact">Контакты</a></li>
           <li><a href="https://yaposspall.shop/">yaposspall.shop</a></li>
-          <li><a href="https://t.me/YPsupport" target="_blank" rel="noopener">@YPsupport</a></li>
+          <li><a href="https://t.me/Japanguy" target="_blank" rel="noopener">@Japanguy</a></li>
         </ul>
       </div>
     </div>
@@ -2132,7 +2165,8 @@
       categoryLabel: 'Футболка / Oversize',
       price: 2800,
       images: ['img/064744a78d.webp', 'img/db56bc25b5.webp', 'img/acb4e720ab.webp', 'img/81fc63a457.webp'],
-      description: 'Чёрная оверсайз футболка. Спереди — фирменный лого YP. На спине — каскад двоичного кода, переходящего в ветку сакуры. На рукаве — пасхалка для своих: include &lt;beer.h&gt;.',
+      description: 'Мы живём в матрице — и знаем об этом. Спереди фирменный знак YP, на спине двоичный код осыпается вниз и прорастает веткой сакуры. На рукаве пасхалка для своих: <code>#include &lt;beer.h&gt;</code>.',
+      features: ['Лого YP на груди', 'Код и сакура на всю спину', 'Принт на рукаве'],
       sizes: ['S', 'M', 'L', 'XL', 'XXL'],
       badge: 'NEW'
     },
@@ -2143,7 +2177,8 @@
       categoryLabel: 'Футболка / Oversize',
       price: 2800,
       images: ['img/7bc97869a4.webp', 'img/80e49385a0.webp'],
-      description: 'Чёрная оверсайз с розовым принтом. Лого YP на груди, паучьи лилии (хиганбана) на спине. На рукаве: alt_girl_mydream.',
+      description: 'Чёрная футболка с розовым акцентом. На груди лого YP, на спине раскрываются паучьи лилии — хиганбана, цветы, которые в Японии растут на границе миров. На рукаве подпись <code>alt_girl_mydream</code>.',
+      features: ['Розовое лого YP на груди', 'Хиганбана на спине', 'Принт на рукаве'],
       sizes: ['S', 'M', 'L', 'XL'],
       badge: 'NEW'
     },
@@ -2154,7 +2189,8 @@
       categoryLabel: 'Футболка / Oversize',
       price: 3200,
       images: ['img/e65a68ef43.webp', 'img/83e1780eae.webp'],
-      description: 'Крылья на груди и синий цветочный шлейф на спине — что-то живое прорастает сквозь черноту. Красиво и немного жутко, как и должно быть.',
+      description: 'Крылья на груди и синий цветочный шлейф на спине: будто что-то живое прорастает сквозь черноту. Красиво и немного жутко — как и должно быть.',
+      features: ['Крылья на груди', 'Синие цветы на спине'],
       sizes: ['S', 'M', 'L', 'XL'],
       badge: null
     },
@@ -2165,7 +2201,8 @@
       categoryLabel: 'Постер / A2',
       price: 650,
       images: ['img/a32d9e7113.webp'],
-      description: 'Постер A2. Star — фигура из света и праха. Лимитированная серия YP.',
+      description: 'Фигура из света и праха, раскинувшая руки. Тот, кто остаётся, когда всё остальное рассыпалось.',
+      features: ['Чёрно-белая графика', 'Подпись YP'],
       sizes: ['A2'],
       badge: 'LIMITED'
     },
@@ -2176,7 +2213,8 @@
       categoryLabel: 'Постер / A2',
       price: 800,
       images: ['img/4061076bf1.webp'],
-      description: 'Постер A2. Замок, тишина, хиганбана. Для стены, на которую хочется смотреть в три часа ночи. Тираж — 100 шт.',
+      description: 'Замок, тишина и хиганбана. Для стены, на которую хочется смотреть в три часа ночи. Тираж ограничен — 100 штук.',
+      features: ['Тираж 100 шт', 'Розовые хиганбана на чёрном'],
       sizes: ['A2'],
       badge: 'LIMITED'
     },
@@ -2187,12 +2225,27 @@
       categoryLabel: 'Постер / A2',
       price: 500,
       images: ['img/a2a15b4ac4.webp'],
-      description: 'Постер A2. Kiss Sakura — расцветающая тишина. Лимитированная серия YP.',
+      description: 'Расцветающая тишина: сакура, которая цветёт, пока никто не смотрит.',
+      features: ['Чёрно-белая графика', 'Подпись YP'],
       sizes: ['A2'],
       badge: 'LIMITED'
     }
   ];
 
+  // Характеристики по типу товара. ⚠ Состав и плотность — проверь и поправь под свои образцы
+  const SPECS = {
+    tees: [
+      ['Крой', 'Оверсайз, спущенное плечо'],
+      ['Ткань', '100% хлопок, кулирка'],
+      ['Плотность', '240 г/м²'],
+      ['Уход', 'Стирка 30°, наизнанку. Не гладить по принту']
+    ],
+    posters: [
+      ['Формат', 'A2 — 42 × 59,4 см'],
+      ['Рамка', 'Без рамки'],
+      ['Отправка', 'Свёрнутым в тубусе, чтобы не помялся']
+    ]
+  };
   function formatPrice(n) { return n.toLocaleString('ru-RU') + ' ₽'; }
 
   function renderCatalog(filter = 'all') {
@@ -2210,7 +2263,7 @@
           <div class="product-name">${p.name}</div>
           <div class="product-bottom">
             <div class="product-price">${formatPrice(p.price)}</div>
-            <button class="product-add" onclick="event.stopPropagation(); quickAdd('${p.id}')">+ В корзину</button>
+            <button class="product-add" onclick="event.stopPropagation(); quickAdd('${p.id}', this)">+ В корзину</button>
           </div>
         </div>
       </article>
@@ -2294,7 +2347,7 @@
     const p = PRODUCTS.find(x => x.id === id);
     if (!p) return;
     currentProduct = p;
-    currentSize = p.sizes[0];
+    currentSize = p.sizes.length === 1 ? p.sizes[0] : null; // размер выбирает покупатель сам
     currentImageIndex = 0;
     const body = document.getElementById('productBody');
     body.innerHTML = `
@@ -2317,13 +2370,15 @@
         <div class="pm-name">${p.name}</div>
         <div class="pm-price">${formatPrice(p.price)}</div>
         <p class="pm-desc">${p.description}</p>
+        ${p.features && p.features.length ? `<ul class="pm-features">${p.features.map(f => `<li>${f}</li>`).join('')}</ul>` : ''}
+        ${SPECS[p.category] ? `<dl class="pm-specs">${SPECS[p.category].map(r => `<div><dt>${r[0]}</dt><dd>${r[1]}</dd></div>`).join('')}</dl>` : ''}
         <div class="pm-sizes-label">— Размер —</div>
         <div class="pm-sizes">
           ${p.sizes.map((s, i) => `
-            <button class="pm-size ${i === 0 ? 'active' : ''}" onclick="pmSelectSize('${s}', this)">${s}</button>
+            <button class="pm-size ${p.sizes.length === 1 ? 'active' : ''}" onclick="pmSelectSize('${s}', this)">${s}</button>
           `).join('')}
         </div>
-        <button class="pm-add" onclick="addCurrentToCart()">Добавить в корзину</button>
+        <button class="pm-add" id="pmAdd" onclick="addCurrentToCart()" ${p.sizes.length > 1 ? 'disabled' : ''}>${p.sizes.length > 1 ? 'Выбери размер' : 'Добавить в корзину'}</button>
       </div>
     `;
     document.getElementById('productDrawer').classList.add('open');
@@ -2345,6 +2400,8 @@
     currentSize = size;
     document.querySelectorAll('.pm-size').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    const add = document.getElementById('pmAdd');
+    if (add) { add.disabled = false; add.textContent = 'Добавить в корзину · ' + size; }
   }
   function closeProduct() {
     document.getElementById('productDrawer').classList.remove('open');
@@ -2352,13 +2409,29 @@
   }
   function addCurrentToCart() {
     if (!currentProduct) return;
+    if (!currentSize) { showToast('Сначала выбери размер'); return; }
     addToCart(currentProduct.id, currentSize);
     closeProduct();
   }
-  function quickAdd(id) {
+  function quickAdd(id, btn) {
     const p = PRODUCTS.find(x => x.id === id);
     if (!p) return;
-    addToCart(id, p.sizes[0]);
+    if (p.sizes.length === 1 || !btn) { if (p.sizes.length === 1) addToCart(id, p.sizes[0]); else openProduct(id); return; }
+    // несколько размеров — показываем выбор прямо на карточке
+    const card = btn.closest('.product'); if (!card) return;
+    document.querySelectorAll('.size-pick').forEach(e => e.remove());
+    const box = document.createElement('div');
+    box.className = 'size-pick';
+    box.innerHTML = '<div class="size-pick-label">Выбери размер</div><div class="size-pick-row">' +
+      p.sizes.map(s => `<button type="button" data-s="${s}">${s}</button>`).join('') +
+      '</div><button type="button" class="size-pick-close" aria-label="Закрыть">×</button>';
+    box.addEventListener('click', e => {
+      e.stopPropagation();
+      const s = e.target.dataset.s;
+      if (s) { addToCart(id, s); box.remove(); }
+      else if (e.target.classList.contains('size-pick-close')) box.remove();
+    });
+    card.querySelector('.product-media').appendChild(box);
   }
 
   let cart = [];
@@ -2371,7 +2444,8 @@
     if (existing) existing.qty++;
     else cart.push({ id, size, qty: 1 });
     renderCart();
-    showToast('Добавлено в корзину');
+    const p = PRODUCTS.find(x => x.id === id);
+    showToast('Добавлено' + (p ? ': ' + p.name + (p.sizes.length > 1 ? ', ' + size : '') : ''));
   }
   function removeFromCart(idx) { cart.splice(idx, 1); renderCart(); }
   function renderCart() {
@@ -2787,7 +2861,7 @@
   }
   function sendOrderTG() {
     copyText(lastOrderText).then(() => showToast('Заказ скопирован — вставь в чат'), () => {});
-    window.open('https://t.me/YPsupport', '_blank', 'noopener');
+    window.open('https://t.me/Japanguy', '_blank', 'noopener');
   }
 
   // ---- Mobile menu ----
@@ -3978,9 +4052,8 @@
 
 <!-- COOKIE BANNER -->
 <div class="yp-cookie" id="ypCookie" role="dialog" aria-label="Cookies">
-  <div class="yp-cookie-label">— cookies —</div>
-  <p>Мы храним только твою корзину — прямо в браузере. Никаких трекеров, никакой слежки. Только тьма.</p>
-  <button type="button" id="ypCookieOk">Принять</button>
+  <p>🍪 Храним только корзину — в твоём браузере. Без трекеров.</p>
+  <button type="button" id="ypCookieOk">Ок</button>
 </div>
 <script>
   (function () {
