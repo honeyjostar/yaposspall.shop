@@ -1147,6 +1147,10 @@
   .co-field input:focus, .co-field textarea:focus { outline: none; border-color: var(--line-strong); }
   .co-field input::placeholder, .co-field textarea::placeholder { color: rgba(255,255,255,0.25); }
   .co-field.invalid input, .co-field.invalid textarea { border-color: #b54b4b; }
+  .co-field label.co-agree, .co-agree { display: flex; gap: 10px; align-items: flex-start; font-size: .72rem; line-height: 1.55; color: #aaa; cursor: pointer; text-transform: none; letter-spacing: 0; }
+  .co-agree input { width: 16px; height: 16px; margin-top: 2px; flex: none; accent-color: #fff; }
+  .co-agree a { color: #fff; text-decoration: underline; }
+  .co-consent.invalid .co-agree { color: #e07b7b; }
   .co-err { display: none; margin-top: 6px; font-size: .7rem; line-height: 1.5; color: #e07b7b; }
   .co-field.invalid .co-err { display: block; }
   .co-err button { background: none; border: 0; padding: 0; color: #fff; text-decoration: underline; cursor: pointer; font: inherit; }
@@ -2134,7 +2138,7 @@
       </div>
     </div>
     <div class="footer-bottom">
-      <p>© 2026 YP / yaposspall</p>
+      <p>© 2026 YP / yaposspall · <a href="privacy.html" style="color:inherit;text-decoration:underline">Политика конфиденциальности</a></p>
       <p>混沌の中で、私は夢を見る</p>
     </div>
   </div>
@@ -2631,6 +2635,11 @@
         <label>Комментарий (необязательно)</label>
         <textarea id="co-note" rows="2" maxlength="400" placeholder="Пожелания к заказу">${prev.note||''}</textarea>
       </div>
+      <div class="co-field co-consent" id="f-agree">
+        <label class="co-agree"><input type="checkbox" id="co-agree" ${prev.agree ? 'checked' : ''}>
+          <span>Согласен(на) на обработку персональных данных для оформления и доставки заказа — <a href="privacy.html" target="_blank" rel="noopener">политика конфиденциальности</a></span></label>
+        <div class="co-err">Без согласия не сможем принять заказ — данные нужны только для доставки.</div>
+      </div>
       <div class="co-summary">
         <div class="co-summary-row"><span>Товаров</span><span>${coItemsCount()} шт</span></div>
         ${gameRewardRow()}
@@ -2647,6 +2656,7 @@
       el.addEventListener('blur', () => { if (el.value.trim()) validateField(id); });
       el.addEventListener('input', () => el.closest('.co-field').classList.remove('invalid'));
     });
+    document.getElementById('co-agree').addEventListener('change', () => document.getElementById('f-agree').classList.remove('invalid'));
   }
 
   // ---------- проверка данных заказа ----------
@@ -2735,7 +2745,10 @@
   async function goPayment() {
     await loadCities();
     const ids = ['co-name', 'co-contact', 'co-city', 'co-addr'];
-    const ok = ids.map(validateField).every(Boolean);
+    let ok = ids.map(validateField).every(Boolean);
+    const agree = document.getElementById('co-agree');
+    document.getElementById('f-agree').classList.toggle('invalid', !agree.checked);
+    if (!agree.checked) ok = false;
     if (!ok) {
       const first = document.querySelector('#checkoutBody .co-field.invalid input, #checkoutBody .co-field.invalid textarea');
       if (first) first.focus();
@@ -2744,7 +2757,8 @@
     const val = id => document.getElementById(id).value.trim();
     checkoutData = {
       name: val('co-name'), contact: val('co-contact'),
-      city: val('co-city'), addr: val('co-addr'), note: (document.getElementById('co-note').value || '').trim().slice(0, 400)
+      city: val('co-city'), addr: val('co-addr'), note: (document.getElementById('co-note').value || '').trim().slice(0, 400),
+      agree: true
     };
     renderPayment();
   }
