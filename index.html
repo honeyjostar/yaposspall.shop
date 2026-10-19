@@ -1097,6 +1097,7 @@
     color: var(--muted);
     font-weight: 500;
   }
+  .co-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; } /* ловушка для ботов */
   .promo { margin-bottom: 14px; }
   .promo-row { display: flex; gap: 8px; }
   .promo-row input { flex: 1; min-width: 0; background: transparent; border: 1px solid var(--line-strong); color: #fff;
@@ -2635,6 +2636,7 @@
         <label>Комментарий (необязательно)</label>
         <textarea id="co-note" rows="2" maxlength="400" placeholder="Пожелания к заказу">${prev.note||''}</textarea>
       </div>
+      <div class="co-hp" aria-hidden="true"><label>Сайт компании</label><input type="text" id="co-website" tabindex="-1" autocomplete="off"></div>
       <div class="co-field co-consent" id="f-agree">
         <label class="co-agree"><input type="checkbox" id="co-agree" ${prev.agree ? 'checked' : ''}>
           <span>Согласен(на) на обработку персональных данных для оформления и доставки заказа — <a href="privacy.html" target="_blank" rel="noopener">политика конфиденциальности</a></span></label>
@@ -2650,6 +2652,7 @@
       </button>
     `;
     body.scrollTop = 0;
+    if (!window.__coOpened) window.__coOpened = Date.now(); // человек не заполнит 4 поля быстрее 3 секунд
     loadCities().then(fillCityList);
     ['co-name', 'co-contact', 'co-city', 'co-addr'].forEach(id => {
       const el = document.getElementById(id);
@@ -2758,7 +2761,8 @@
     checkoutData = {
       name: val('co-name'), contact: val('co-contact'),
       city: val('co-city'), addr: val('co-addr'), note: (document.getElementById('co-note').value || '').trim().slice(0, 400),
-      agree: true
+      agree: true,
+      bot: !!(document.getElementById('co-website') || {}).value || (Date.now() - (window.__coOpened || 0) < 3000)
     };
     renderPayment();
   }
@@ -2804,6 +2808,7 @@
   async function placeOrder() {
     if (orderSending) return;
     let orderNo = 'YP-' + Date.now().toString().slice(-6), botName = null, sentOk = false;
+    if (checkoutData && checkoutData.bot) { cart = []; renderCart(); closeCheckout(); showToast('Заказ принят'); return; } // ловушка сработала
     if (ORDER_API.startsWith('https://')) {
       orderSending = true;
       const btn = document.querySelector('#checkoutBody .btn-primary');
